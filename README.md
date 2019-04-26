@@ -27,9 +27,15 @@ optional arguments:
   --progress {0,1}      Print progress during calculation. Default 1.
   ```
   -----------
-#Examples 
+# Examples 
 To find the sparse elements for the minimal mechanisms/h2o2.cti file with at most three molecules of each species on a single core, run  
-`mkdir -p h2o2; ./ratematrix.py --filebase h2o2 --Nmax 3 --mechanism mechanisms/h2o2.cti`. To do this in parallel over the 28 reactions in the mechanism for 5 molecules per species, run  
-`mkdir -p h2o2; mkdir -p outs; for i in {0..27}; do ./ratematrix.py --filebase h2o2/$i --reaction $i --progress 0 --Nmax 3 --mechanism mechanisms/h2o2.cti &> outs/$i.out & done`.  
+`mkdir -p h2o2`
+`./ratematrix.py --filebase h2o2 --Nmax 3 --mechanism mechanisms/h2o2.cti`
 To calculate 1000 eigenvalues and eigenvectors, and plot and store them, run  
+`./ratematrix.py --accumulate 1 --filebase h2o2 --Nmax 3 --Nvals 1000`
+To do this in parallel over the 28 reactions in the mechanism for 5 molecules per species, run  
+`mkdir -p h2o2`
+`mkdir -p outs`
+`for i in {0..27}; do ./ratematrix.py --filebase h2o2/$i --reaction $i --progress 0 --Nmax 3 --mechanism mechanisms/h2o2.cti &> outs/$i.out & done`
+To plot and store these eigenvalues and eigenvectors, run   
 `./ratematrix.py --accumulate 1 --filebase h2o2 --Nmax 3 --Nvals 1000`.  
