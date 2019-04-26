@@ -36,6 +36,6 @@ To calculate 1000 eigenvalues and eigenvectors, and plot and store them, run
 To do this in parallel over the 28 reactions in the mechanism for 5 molecules per species, run  
 `mkdir -p h2o2_2`  
 `mkdir -p outs`  
-`for i in {0..27}; do ./ratematrix.py --filebase h2o2_2/$i --reaction $i --progress 0 --Nmax 3 --mechanism mechanisms/h2o2.cti &> outs/$i.out & done`  
+`for i in {0..27}; do ./ratematrix.py --filebase h2o2_2/$i --reaction $i --progress 0 --Nmax 5 --mechanism mechanisms/h2o2.cti &> outs/$i.out & done`  
 To plot and store these eigenvalues and eigenvectors, run   
 `./ratematrix.py --accumulate 1 --filebase h2o2_2 --Nmax 5 --Nvals 1000`  
