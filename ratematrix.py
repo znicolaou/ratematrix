@@ -15,10 +15,15 @@ parser.add_argument("--filebase", type=str, required=True, dest='filebase', help
 parser.add_argument("--accumulate", type=int, default=0, choices=[0,1], help='If 1, search filebase directory for npy files, generate sparse matrix, and plot eigenvalues. Default 0.')
 parser.add_argument("--mechanism", type=str, required=False, default='mechanisms/h2o2.cti', dest='mechanism', help='Mechanism cti file. Default mechanisms/h2o2.cti.')
 parser.add_argument("--reaction", type=int, required=False, default=None, dest='rind', help='Reaction index, provided for parallelization. If none is specified, the program will loop through all reactions in the model in sequence. Default None.')
-parser.add_argument("--Nmax", type=int, required=False, default=5, dest='Nmax', help='Maximum number of molecules for each species. Default 5.')
-parser.add_argument("--Nvals", type=int, required=False, default=1000, dest='Nvals', help='Number of eigenvalues to calculate, when --accumulate 1 is set. Default 1000')
+parser.add_argument("--Nmax", type=int, required=False, default=3, dest='Nmax', help='Maximum number of molecules for each species. Default 3.')
+parser.add_argument("--Nvals", type=int, required=False, default=100, dest='Nvals', help='Number of eigenvalues to calculate, when --accumulate 1 is set. Default 1000')
 parser.add_argument("--progress", type=int, required=False, default=1, choices=[0,1], help='Print progress during calculation. Default 1.')
+parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature. Default 1500K.')
+parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure. Default 1atm')
+
 args = parser.parse_args()
+
+
 
 #Functions for relating multiindices to matrix indices
 def get_digit(number, n, base):
@@ -97,6 +102,7 @@ rateindex=args.rind
 progress=args.progress
 accumulate=args.accumulate
 gas=ct.Solution(mechanism)
+gas.TP=args.temperature,args.pressure*ct.one_atm
 ns=gas.n_species
 nr=gas.n_reactions
 species=gas.species_names

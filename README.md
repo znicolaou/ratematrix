@@ -21,13 +21,13 @@ optional arguments:
                         is specified, the program will loop through all
                         reactions in the model in sequence. Default None.
   --Nmax NMAX           Maximum number of molecules for each species. Default
-                        5.
+                        3.
   --Nvals NVALS         Number of eigenvalues to calculate, when --accumulate
                         1 is set. Default 1000
   --progress {0,1}      Print progress during calculation. Default 1.
   ```
   -----------
-# Examples 
+# Examples
 To find the sparse elements for the minimal mechanisms/h2o2.cti file with at most three molecules of each species on a single core, run  
 `mkdir -p h2o2`  
 `./ratematrix.py --filebase h2o2 --Nmax 3 --mechanism mechanisms/h2o2.cti`  
