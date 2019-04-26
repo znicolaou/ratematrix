@@ -1,4 +1,10 @@
-# ratematrix
+# Files in the ratematrix repository
+The file ratematrix.py contains python code to calculate the sparse matrix elements of the transition rate matrix for a given Cantera .cti model and find eigenvalues and eigenvectors. The folder mechanisms contains a few .cti models.
+
+# System requirements
+The python code has been run with anaconda, which can be downloaded here: https://www.anaconda.com/distribution/. The script requires packes numpy, scipy, cantera, and matplotlib, which can be installed in a new environment after installing anaconda with the shell command `conda create -n cantera_env -c cantera numpy scipy cantera matplotlib`.  Activate the environment with `source activate cantera_env` to run the script.
+
+# Usage
 Running `./ratematrix.py -h` produces the following usage message:
 ```
 usage: ratematrix.py [-h] --filebase FILEBASE [--accumulate {0,1}]
