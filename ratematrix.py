@@ -58,7 +58,7 @@ def calculate_sparse_elements(rind, filebase):
     for  i in range(Nmax**ns):
         stop=timeit.default_timer()
         if progress==1:
-            print("%.6f\t\t%.1fs\t\t%.1fs\t\t"%(i*1.0/Nmax**ns, stop-start2,(stop-start2)*(Nmax**ns-i-1)/(i+1)),end='\t\r')
+            print("%.5f\t\t%.1fs\t\t%.1fs\t\t"%(i*1.0/Nmax**ns, stop-start2,(stop-start2)*(Nmax**ns-i-1)/(i+1)),end='\t\r')
         multiindex=get_multiindex(i)
         gas.X=multiindex
         #forward reaction
@@ -118,6 +118,7 @@ if(accumulate==1):
     ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(Nmax**ns,Nmax**ns))
     eigenvalues,eigenvectors=eigs(ratematrix,k=Nvals)
     np.save(filebase+"/eigenvalues",eigenvalues)
+    np.save(filebase+"/eigenvectors",eigenvectors)
     fig=plt.figure()
     fig.gca().set_ylabel(r'$\mathrm{Im}\left(\lambda\right)$')
     fig.gca().set_xlabel(r'$\mathrm{Re}\left(\lambda\right)$')
@@ -125,7 +126,7 @@ if(accumulate==1):
     plt.tight_layout()
     plt.show()
     fig.savefig(filebase+"/eigenvalues.pdf", bbox_inches='tight')
-    print("\nRuntime: %.1f s"%(timeit.default_timer()-start),end='\t\r')
+    print("\nRuntime: %.1f s"%(timeit.default_timer()-start))
 elif rateindex == None:
     for rind in range(nr):
         print('Reaction %i'%(rind))
