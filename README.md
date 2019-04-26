@@ -3,9 +3,9 @@ Running `./ratematrix.py -h` produces the following usage message:
 ```
 usage: ratematrix.py [-h] --filebase FILEBASE [--accumulate {0,1}]
                      [--mechanism MECHANISM] [--reaction RIND] [--Nmax NMAX]
-                     [--Nvals NVALS]
+                     [--Nvals NVALS] [--progress {0,1}]
 
-Generate a sparse rate matrix from Cantera model.
+Generate a sparse rate matrix from cantera model.
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -24,6 +24,7 @@ optional arguments:
                         5.
   --Nvals NVALS         Number of eigenvalues to calculate, when --accumulate
                         1 is set. Default 1000
+  --progress {0,1}      Print progress during calculation. Default 1.
   ```
   -----------
-  Examples: To find the sparse elements for the minimal mechanisms/h2o2.cti file with at most three molecules of each species on a single core, run `mkdir -p h2o2; ./ratematrix.py --filebase h2o2 --Nmax 3 --mechanism mechanisms/h2o2.cti`. To do this in parallel over the 28 reactions in the mechanism, run `mkdir -p h2o2; for i in {0..27}; do ./ratematrix.py --filebase h2o2/$i --reaction $i --Nmax 3 --mechanism mechanisms/h2o2.cti &> $i.out & done`. To calculate 1000 eigenvalues and eigenvectors, and plot and store them, run `./ratematrix.py --accumulate 1 --filebase h2o2 --Nmax 3 --Nvals 1000`.
+  Examples: To find the sparse elements for the minimal mechanisms/h2o2.cti file with at most three molecules of each species on a single core, run `mkdir -p h2o2; ./ratematrix.py --filebase h2o2 --Nmax 3 --mechanism mechanisms/h2o2.cti`. To do this in parallel over the 28 reactions in the mechanism, run `mkdir -p h2o2; mkdir -p outs; for i in {0..27}; do ./ratematrix.py --filebase h2o2/$i --reaction $i --progress 0 --Nmax 3 --mechanism mechanisms/h2o2.cti &> outs/$i.out & done`. To calculate 1000 eigenvalues and eigenvectors, and plot and store them, run `./ratematrix.py --accumulate 1 --filebase h2o2 --Nmax 3 --Nvals 1000`.

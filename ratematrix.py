@@ -17,6 +17,7 @@ parser.add_argument("--mechanism", type=str, required=False, default='mechanisms
 parser.add_argument("--reaction", type=int, required=False, default=None, dest='rind', help='Reaction index, provided for parallelization. If none is specified, the program will loop through all reactions in the model in sequence. Default None.')
 parser.add_argument("--Nmax", type=int, required=False, default=5, dest='Nmax', help='Maximum number of molecules for each species. Default 5.')
 parser.add_argument("--Nvals", type=int, required=False, default=1000, dest='Nvals', help='Number of eigenvalues to calculate, when --accumulate 1 is set. Default 1000')
+parser.add_argument("--progress", type=int, required=False, default=1, choices=[0,1], help='Print progress during calculation. Default 1.')
 args = parser.parse_args()
 
 #Functions for relating multiindices to matrix indices
@@ -47,15 +48,17 @@ def calculate_sparse_elements(rind, filebase):
     data=[]
     rows=[]
     columns=[]
-    start=timeit.default_timer()
-    print("Percent\tElapsed\tRemaining")
+    if(progress==1):
+        print("Percent\t\tElapsed\t\tRemaining\t\t")
     stop=timeit.default_timer()
     reaction=gas.reactions()[rind]
     rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
     pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species])
+    start2=timeit.default_timer()
     for  i in range(Nmax**ns):
         stop=timeit.default_timer()
-        print("%.3f\t%.1f s\t%.1f s"%(i*1.0/Nmax**ns, stop-start,(stop-start)*(Nmax**ns-i-1)/(i+1)))
+        if progress==1:
+            print("%.6f\t\t%.1fs\t\t%.1fs\t\t"%(i*1.0/Nmax**ns, stop-start2,(stop-start2)*(Nmax**ns-i-1)/(i+1)),end='\t\r')
         multiindex=get_multiindex(i)
         gas.X=multiindex
         #forward reaction
@@ -91,13 +94,16 @@ mechanism=args.mechanism
 Nmax=args.Nmax
 Nvals=args.Nvals
 rateindex=args.rind
+progress=args.progress
+accumulate=args.accumulate
 gas=ct.Solution(mechanism)
 ns=gas.n_species
 nr=gas.n_reactions
 species=gas.species_names
+start=timeit.default_timer()
 
 #Accumulate sparse data and plot
-if(args.accumulate==1):
+if(accumulate==1):
     p = re.compile("(.*)_data.npy")
     filebases=[item for sublist in np.unique([p.findall(name) for name in np.sort(os.listdir(filebase))]) for item in sublist]
     data=np.array([])
@@ -119,8 +125,15 @@ if(args.accumulate==1):
     plt.tight_layout()
     plt.show()
     fig.savefig(filebase+"/eigenvalues.pdf", bbox_inches='tight')
+    print("\nRuntime: %.1f s"%(timeit.default_timer()-start),end='\t\r')
 elif rateindex == None:
     for rind in range(nr):
+        print('Reaction %i'%(rind))
         calculate_sparse_elements(rind,filebase+"/%i"%(rind))
+        if(progress==1):
+            print('')
+    print("\nRuntime: %.1fs"%(timeit.default_timer()-start))
 else:
+    print('Reaction %i'%(rateindex))
     calculate_sparse_elements(rateindex, filebase)
+    print("\nRuntime: %.1fs"%(timeit.default_timer()-start))
