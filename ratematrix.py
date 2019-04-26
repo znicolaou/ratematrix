@@ -69,23 +69,25 @@ def calculate_sparse_elements(rind, filebase):
         #forward reaction
         k=gas.forward_rate_constants[rind]
         multiindex2=multiindex-rstoi+pstoi
-        if np.all((multiindex-rstoi)>=0) and np.all(multiindex2<Nmax) and not np.isnan(k):
+        if np.all(multiindex2>=0) and np.all(multiindex2<Nmax) and not np.isnan(k):
+            rate=get_rate(multiindex,rstoi,k,reaction)
             j=get_index(multiindex2)
-            data.append(get_rate(multiindex,rstoi,k,reaction))
+            data.append(rate)
             rows.append(i)
             columns.append(j)
-            data.append(-get_rate(multiindex,rstoi,k,reaction))
+            data.append(-rate)
             rows.append(i)
             columns.append(i)
         #reverse reaction
         k=gas.reverse_rate_constants[rind]
         multiindex2=multiindex+rstoi-pstoi
-        if np.all((multiindex-pstoi)>=0) and np.all(multiindex2<Nmax) and not np.isnan(k):
+        if np.all(multiindex2>=0) and np.all(multiindex2<Nmax) and not np.isnan(k):
+            rate=get_rate(multiindex,pstoi,k,reaction)
             j=get_index(multiindex2)
-            data.append(get_rate(multiindex,pstoi,k,reaction))
+            data.append(rate)
             rows.append(i)
             columns.append(j)
-            data.append(-get_rate(multiindex,pstoi,k,reaction))
+            data.append(-rate)
             rows.append(i)
             columns.append(i)
     #save to files
@@ -122,7 +124,7 @@ if(accumulate==1):
     print("Sparsity: %f"%(1-len(data)*1.0/(Nmax**(2*ns))))
     print("Average non-zero entry: %f"%(np.linalg.norm(data)/len(data)))
     ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(Nmax**ns,Nmax**ns))
-    eigenvalues,eigenvectors=eigs(ratematrix,k=Nvals)
+    eigenvalues,eigenvectors=eigs(ratematrix,k=Nvals,which='LR')
     np.save(filebase+"/eigenvalues",eigenvalues)
     np.save(filebase+"/eigenvectors",eigenvectors)
     fig=plt.figure()
