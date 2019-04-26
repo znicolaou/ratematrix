@@ -69,7 +69,7 @@ def calculate_sparse_elements(rind, filebase):
         #forward reaction
         k=gas.forward_rate_constants[rind]
         multiindex2=multiindex-rstoi+pstoi
-        if np.all((multiindex-rstoi)[np.where(rstoi>0)]>=0) and np.all(multiindex2<Nmax) and k>0:
+        if np.all((multiindex-rstoi)>=0) and np.all(multiindex2<Nmax) and not np.isnan(k):
             j=get_index(multiindex2)
             data.append(get_rate(multiindex,rstoi,k,reaction))
             rows.append(i)
@@ -80,7 +80,7 @@ def calculate_sparse_elements(rind, filebase):
         #reverse reaction
         k=gas.reverse_rate_constants[rind]
         multiindex2=multiindex+rstoi-pstoi
-        if np.all((multiindex-pstoi)[np.where(pstoi>0)]>=0) and np.all(multiindex2<Nmax) and k>0:
+        if np.all((multiindex-pstoi)>=0) and np.all(multiindex2<Nmax) and not np.isnan(k):
             j=get_index(multiindex2)
             data.append(get_rate(multiindex,pstoi,k,reaction))
             rows.append(i)
