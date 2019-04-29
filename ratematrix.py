@@ -8,6 +8,7 @@ import re
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import eigs
 import argparse
+import itertools
 
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
@@ -18,8 +19,8 @@ parser.add_argument("--reaction", type=int, required=False, default=None, dest='
 parser.add_argument("--Nmax", type=int, required=False, default=3, dest='Nmax', help='Maximum number of molecules for each species. Default 3.')
 parser.add_argument("--Nvals", type=int, required=False, default=100, dest='Nvals', help='Number of eigenvalues to calculate, when --accumulate 1 is set. Default 1000')
 parser.add_argument("--progress", type=int, required=False, default=1, choices=[0,1], help='Print progress during calculation. Default 1.')
-parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature. Default 1500K.')
-parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure. Default 1atm')
+parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
+parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1')
 
 args = parser.parse_args()
 
@@ -95,6 +96,26 @@ def calculate_sparse_elements(rind, filebase):
     np.save("%s_rows"%(filebase),rows)
     np.save("%s_columns"%(filebase),columns)
 
+def find_indices(atoms):
+    #Loop to find indices corresponding to specifed atom counts
+    if(progress==1):
+        print("Percent  \t\tElapsed  \t\tRemaining  \t\t")
+    start2=timeit.default_timer()
+    indices=[]
+    for i in range(Nmax**ns):
+        stop=timeit.default_timer()
+        if progress==1:
+            print("%.5f   \t\t%.5fs   \t\t%.5fs   \t\t"%(i*1.0/Nmax**ns, stop-start2,(stop-start2)*(Nmax**ns-i-1)/(i+1)),end='\t\r')
+        multiindex=get_multiindex(i)
+        if(np.all(get_atoms(multiindex)==atoms)):
+            indices.append(i)
+    return indices
+
+
+def get_atoms(multiindex):
+    return np.sum([[multiindex[i]*gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements] for i in range(ns)],axis=0)
+
+
 #Main
 filebase=args.filebase
 mechanism=args.mechanism
@@ -108,10 +129,18 @@ gas.TP=args.temperature,args.pressure*ct.one_atm
 ns=gas.n_species
 nr=gas.n_reactions
 species=gas.species_names
+elements=gas.element_names
 start=timeit.default_timer()
 
-#Accumulate sparse data and plot
+
+indices=find_indices([6,3,3])
+print(indices)
+print(len(indices))
+print("\nRuntime: %.1f s"%(timeit.default_timer()-start))
+quit()
+
 if(accumulate==1):
+    #Accumulate sparse data and plot
     p = re.compile("(.*)_data.npy")
     filebases=[item for sublist in np.unique([p.findall(name) for name in np.sort(os.listdir(filebase))]) for item in sublist]
     data=np.array([])
@@ -127,15 +156,20 @@ if(accumulate==1):
     eigenvalues,eigenvectors=eigs(ratematrix,k=Nvals,which='LR')
     np.save(filebase+"/eigenvalues",eigenvalues)
     np.save(filebase+"/eigenvectors",eigenvectors)
+    rmax=np.abs(np.max(np.real(eigenvalues)))
+    imax=np.max(np.abs(np.imag(eigenvalues[np.where(np.real(eigenvalues)>-2*rmax)[0]])))
     fig=plt.figure()
     fig.gca().set_ylabel(r'$\mathrm{Im}\left(\lambda\right)$')
     fig.gca().set_xlabel(r'$\mathrm{Re}\left(\lambda\right)$')
+    fig.gca().set_xlim(-2*rmax,2*rmax)
+    fig.gca().set_ylim(-2*imax,2*imax)
     plt.plot(np.real(eigenvalues),np.imag(eigenvalues), 'bx', markersize=3.0)
     plt.tight_layout()
     plt.show()
     fig.savefig(filebase+"/eigenvalues.pdf", bbox_inches='tight')
     print("\nRuntime: %.1f s"%(timeit.default_timer()-start))
 elif rateindex == None:
+    #Loop through each reaction index and calculate spase elements
     for rind in range(nr):
         print('Reaction %i'%(rind))
         calculate_sparse_elements(rind,filebase+"/%i"%(rind))
@@ -143,6 +177,7 @@ elif rateindex == None:
             print('')
     print("\nRuntime: %.1fs"%(timeit.default_timer()-start))
 else:
+    #Caclulate sparse elements for specified reaction index
     print('Reaction %i'%(rateindex))
     calculate_sparse_elements(rateindex, filebase)
     print("\nRuntime: %.1fs"%(timeit.default_timer()-start))
