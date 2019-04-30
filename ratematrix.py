@@ -111,6 +111,18 @@ def find_indices(atoms):
             indices.append(i)
     return indices
 
+def recursive_list(remaining_atoms, list=[]):
+    avail=available_species(remaining_atoms)
+    if(avail==[]):
+        return list
+    else:
+        list2=[recursive_list(remaining_atoms-get_atoms(spec),item+spec) for spec in avail for item in list]
+        return list2
+
+def available_species(remaining_atoms):
+    avail=[]
+    for i in ns:
+        datoms=[species[i].composition[el] if el in species[i].composition.keys() for el in 
 
 def get_atoms(multiindex):
     return np.sum([[multiindex[i]*gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements] for i in range(ns)],axis=0)
