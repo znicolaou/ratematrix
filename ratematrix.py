@@ -1,4 +1,7 @@
 #!/usr/bin/env python
+from __future__ import print_function
+import matplotlib
+matplotlib.use("TKAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 import cantera as ct
@@ -8,7 +11,6 @@ import re
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import eigs
 import argparse
-import itertools
 
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
@@ -118,6 +120,7 @@ def list_to_multiindex(list):
 
 def get_states(atoms):
     multiindices=recursive_list(atoms)
+    print("\nGenerated %i states with repetitions"%(len(multiindices)))
     return np.unique(multiindices,axis=0)
 
 #Main
