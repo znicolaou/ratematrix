@@ -26,8 +26,6 @@ parser.add_argument("--pressure", type=float, required=False, default=1, help='P
 parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file.')
 args = parser.parse_args()
 
-
-
 #Functions for relating multiindices to matrix indices
 def get_multiindex(index):
     return multiindices[index]
@@ -47,8 +45,8 @@ def get_rate (multiindex, rstoi, k, reaction):
                 efficiency=reaction.efficiencies[species[third_body]]
             ret+=efficiency*k*np.product(multiindex**rstoi2)
         return ret
+#Main loop over rows to enumerate sparse data
 def calculate_sparse_elements(rind, filebase):
-    #Main loop over rows to enumerate sparse data
     data=[]
     rows=[]
     columns=[]
@@ -89,23 +87,27 @@ def calculate_sparse_elements(rind, filebase):
     np.save("%s_rows"%(filebase),rows)
     np.save("%s_columns"%(filebase),columns)
 
-#The problem with this strategy is that many calls are wasted, because the many lists correspond to the same multiindex. Can we enumerate the states without enumerating all those permutations of the same state? Also, can we make this recursive algorithm run in parallel or track its progress?
-def recursive_list(remaining_atoms, list=[]):
+#Find all list of species that have specified number of atoms
+def recursive_list(remaining_atoms, list=[], previously_enumerated=[]):
     avail=available_species(remaining_atoms)
+    previously_enumerated.append(list_to_multiindex(list)
     if(avail==[]):
         if np.all(remaining_atoms == np.zeros(len(elements))):
             #Return the multiindex of the state given by the list of species
             return [list_to_multiindex(list)]
         else:
-            #could not exaust atoms with this branch
+            #could not exaust atoms with this branch; return nothing
             return []
     else:
         #call recursive_list for each available species
         ret=[]
         for spec in avail:
-            ret+=recursive_list(remaining_atoms-np.array([gas.species()[spec].composition[el] if el in gas.species()[spec].composition.keys() else 0 for el in elements]),list+[spec])
+            #Check that the new list of species has not already been enumerated
+            if not (list_to_multiindex(list+[spec]) in previously_enumerated):
+                ret+=recursive_list(remaining_atoms-np.array([gas.species()[spec].composition[el] if el in gas.species()[spec].composition.keys() else 0 for el in elements]),list+[spec],previously_enumerated)
         return ret
 
+#Return indices of species that can be added given remaining atoms
 def available_species(remaining_atoms):
     avail=[]
     for i in range(ns):
@@ -114,14 +116,10 @@ def available_species(remaining_atoms):
             avail.append(i)
     return avail
 
+#Convert the list of species added sequentially to a multiindex
 def list_to_multiindex(list):
     unique,counts=np.unique(list,return_counts=True)
     return [counts[np.where(unique==index)[0][0]] if index in unique else 0 for index in range(ns)]
-
-def get_states(atoms):
-    multiindices=recursive_list(atoms)
-    print("\nGenerated %i states with repetitions"%(len(multiindices)))
-    return np.unique(multiindices,axis=0)
 
 #Main
 filebase=args.filebase
@@ -178,21 +176,20 @@ if(accumulate==1):
 elif rateindex == None:
     #Loop through each reaction index and calculate spase elements
     atoms=np.array(atoms)
-    multiindices=get_states(atoms)
+    multiindices=recursive_list(atoms)
     print("\nGenerated %i-dimensional space in %.1f s"%(len(multiindices), timeit.default_timer()-start))
 
     for rind in range(nr):
-        print('Reaction %i'%(rind))
+        # print('Reaction %i'%(rind))
         calculate_sparse_elements(rind,filebase+"/%i"%(rind))
-        if(progress==1):
-            print('')
+        # if(progress==1):
+            # print('')
     print("\nRuntime: %.1fs"%(timeit.default_timer()-start))
 else:
     #Caclulate sparse elements for specified reaction index
     atoms=np.array(atoms)
     multiindices=get_states(atoms)
     print("\nGenerated %i-dimensional space in %.1f s"%(len(multiindices), timeit.default_timer()-start))
-
-    print('Reaction %i'%(rateindex))
+    #print('Reaction %i'%(rateindex))
     calculate_sparse_elements(rateindex, filebase)
     print("\nRuntime: %.1fs"%(timeit.default_timer()-start))
