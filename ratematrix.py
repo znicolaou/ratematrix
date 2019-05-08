@@ -90,7 +90,7 @@ def calculate_sparse_elements(rind, filebase):
 #Find all list of species that have specified number of atoms
 def recursive_list(remaining_atoms, list=[], previously_enumerated=[]):
     avail=available_species(remaining_atoms)
-    previously_enumerated.append(list_to_multiindex(list)
+    previously_enumerated.append(list_to_multiindex(list))
     if(avail==[]):
         if np.all(remaining_atoms == np.zeros(len(elements))):
             #Return the multiindex of the state given by the list of species
