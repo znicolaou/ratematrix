@@ -48,5 +48,5 @@ optional arguments:
 To find the sparse elements for the minimal mechanisms/h2o2.cti file with five hydrogen atoms, five oxygen atoms, and five argon atoms, run  
 `mkdir -p h2o2`  
 `./ratematrix.py --filebase h2o2 --atoms 5 5 5 --mechanism mechanisms/h2o2.cti`  
-To calculate 100 eigenvalues and eigenvectors, and plot and store them, run  
+To calculate 80 eigenvalues and eigenvectors, and plot and store them, run  
 `./ratematrix.py --accumulate 1 --filebase h2o2 --Nvals 80`  
