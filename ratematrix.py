@@ -88,38 +88,41 @@ def calculate_sparse_elements(rind, filebase):
     np.save("%s_columns"%(filebase),columns)
 
 #Find all list of species that have specified number of atoms
-def recursive_list(remaining_atoms, list=[], previously_enumerated=[]):
+count=0
+levels=[]
+def recursive_list(remaining_atoms, multiindex, previously_enumerated=[],level=0):
+    global count,levels
+    count+=1
     avail=available_species(remaining_atoms)
-    previously_enumerated.append(list_to_multiindex(list))
+    previously_enumerated.append(multiindex.copy())
     if(avail==[]):
         if np.all(remaining_atoms == np.zeros(len(elements))):
-            #Return the multiindex of the state given by the list of species
-            return [list_to_multiindex(list)]
+            #Return list with multiindex
+            levels.append(level)
+            return [multiindex]
         else:
             #could not exaust atoms with this branch; return nothing
             return []
     else:
-        #call recursive_list for each available species
+        #Recurse for each new multiindex that has not been previously enumerated and return list of multiindices
         ret=[]
-        for spec in avail:
-            #Check that the new list of species has not already been enumerated
-            if not (list_to_multiindex(list+[spec]) in previously_enumerated):
-                ret+=recursive_list(remaining_atoms-np.array([gas.species()[spec].composition[el] if el in gas.species()[spec].composition.keys() else 0 for el in elements]),list+[spec],previously_enumerated)
+        for [spec,spec_atoms] in avail:
+            multiindex[spec]+=1
+            if not (multiindex in previously_enumerated):
+                ret+=recursive_list(remaining_atoms-spec_atoms, multiindex, previously_enumerated,level+1)
+            multiindex[spec]-=1
         return ret
 
-#Return indices of species that can be added given remaining atoms
+#Return list of species that can be added to with available atoms
+#We can reduce the amount of recursion if we check here pairs or combinations that can be simultaneously added
+#Maybe with yet another recusive function
 def available_species(remaining_atoms):
     avail=[]
     for i in range(ns):
-        datoms=remaining_atoms-np.array([gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements])
-        if (np.all(datoms>=0)):
-            avail.append(i)
+        spec_atoms=np.array([gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements])
+        if (np.all(remaining_atoms-spec_atoms>=0)):
+            avail.append([i,spec_atoms])
     return avail
-
-#Convert the list of species added sequentially to a multiindex
-def list_to_multiindex(list):
-    unique,counts=np.unique(list,return_counts=True)
-    return [counts[np.where(unique==index)[0][0]] if index in unique else 0 for index in range(ns)]
 
 #Main
 filebase=args.filebase
@@ -176,9 +179,10 @@ if(accumulate==1):
 elif rateindex == None:
     #Loop through each reaction index and calculate spase elements
     atoms=np.array(atoms)
-    multiindices=recursive_list(atoms)
-    print("\nGenerated %i-dimensional space in %.1f s"%(len(multiindices), timeit.default_timer()-start))
-
+    multiindices=recursive_list(atoms,np.zeros(ns).tolist())
+    # print("Generated %i-dimensional space in %.1f s"%(len(multiindices), timeit.default_timer()-start))
+    print(np.sum(atoms), len(multiindices), timeit.default_timer()-start, count, np.max(levels))
+    quit()
     for rind in range(nr):
         # print('Reaction %i'%(rind))
         calculate_sparse_elements(rind,filebase+"/%i"%(rind))
