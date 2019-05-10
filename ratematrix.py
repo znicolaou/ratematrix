@@ -88,41 +88,44 @@ def calculate_sparse_elements(rind, filebase):
     np.save("%s_columns"%(filebase),columns)
 
 #Find all list of species that have specified number of atoms
-count=0
-levels=[]
-def recursive_list(remaining_atoms, multiindex, previously_enumerated=[],level=0):
-    global count,levels
-    count+=1
-    avail=available_species(remaining_atoms)
-    previously_enumerated.append(multiindex.copy())
-    if(avail==[]):
-        if np.all(remaining_atoms == np.zeros(len(elements))):
-            #Return list with multiindex
-            levels.append(level)
-            return [multiindex]
-        else:
-            #could not exaust atoms with this branch; return nothing
-            return []
-    else:
-        #Recurse for each new multiindex that has not been previously enumerated and return list of multiindices
-        ret=[]
-        for [spec,spec_atoms] in avail:
-            multiindex[spec]+=1
-            if not (multiindex in previously_enumerated):
-                ret+=recursive_list(remaining_atoms-spec_atoms, multiindex, previously_enumerated,level+1)
-            multiindex[spec]-=1
-        return ret
+def recursive_list(remaining_atoms, multiindex=[], previously_enumerated=[],last_avail=[[],[]],level=0):
+    if level==0:
+        for i in range(ns):
+            multiindex.append(0)
+            last_avail[0].append(i)
+            last_avail[1].append(np.array([gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements]))
 
-#Return list of species that can be added to with available atoms
-#We can reduce the amount of recursion if we check here pairs or combinations that can be simultaneously added
-#Maybe with yet another recusive function
-def available_species(remaining_atoms):
-    avail=[]
-    for i in range(ns):
-        spec_atoms=np.array([gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements])
-        if (np.all(remaining_atoms-spec_atoms>=0)):
-            avail.append([i,spec_atoms])
-    return avail
+    #Find available species to add out of last available set
+    avail=[[],[]]
+    for i in range(len(last_avail[0])):
+        if (np.all(remaining_atoms-last_avail[1][i]>=0)):
+            avail[0].append(last_avail[0][i])
+            avail[1].append(last_avail[1][i])
+    #Add current multiindex to previously enumerated list so it is not repeated
+    previously_enumerated.append(multiindex.copy())
+    #Base case, check if no new species can be added
+    if(avail==[[],[]]):
+        #Return list with current multiindex if all atoms exausted
+        if np.all(remaining_atoms == np.zeros(len(elements))):
+            # levels.append(level)
+            return [multiindex],1,level
+        #Count not exaust atoms with this branch; return nothing
+        else:
+            return [],1,level
+    #Recurse for each new multiindex that has not been previously enumerated and return list of multiindices
+    else:
+        ret_lists=[]
+        ret_counts=0
+        ret_levels=[0]
+        for i in range(len(avail[0])):
+            multiindex[avail[0][i]]+=1
+            if not (multiindex in previously_enumerated):
+                returned_list,returned_count,returned_level=recursive_list(remaining_atoms-avail[1][i], multiindex, previously_enumerated, avail, level+1)
+                ret_lists+=returned_list
+                ret_counts+=returned_count
+                ret_levels.append(returned_level)
+            multiindex[avail[0][i]]-=1
+        return ret_lists,1+ret_counts,max(ret_levels)
 
 #Main
 filebase=args.filebase
@@ -179,9 +182,9 @@ if(accumulate==1):
 elif rateindex == None:
     #Loop through each reaction index and calculate spase elements
     atoms=np.array(atoms)
-    multiindices=recursive_list(atoms,np.zeros(ns).tolist())
+    multiindices,count,level=recursive_list(atoms)
     # print("Generated %i-dimensional space in %.1f s"%(len(multiindices), timeit.default_timer()-start))
-    print(np.sum(atoms), len(multiindices), timeit.default_timer()-start, count, np.max(levels))
+    print(np.sum(atoms), len(multiindices), timeit.default_timer()-start, count, level)
     quit()
     for rind in range(nr):
         # print('Reaction %i'%(rind))
