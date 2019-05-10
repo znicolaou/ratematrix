@@ -15,12 +15,9 @@ import argparse
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
 parser.add_argument("--filebase", type=str, required=True, dest='filebase', help='Base string for npy file output. Three files will be created for each reaction, storing rates, row indices, and column indices.')
-parser.add_argument("--accumulate", type=int, default=0, choices=[0,1], help='If 1, search filebase directory for npy files, generate sparse matrix, and plot eigenvalues. Default 0.')
 parser.add_argument("--mechanism", type=str, required=False, default='mechanisms/h2o2.cti', dest='mechanism', help='Mechanism cti file. Default mechanisms/h2o2.cti.')
-parser.add_argument("--reaction", type=int, required=False, default=None, dest='rind', help='Reaction index, provided for parallelization. If none is specified, the program will loop through all reactions in the model in sequence. Default None.')
-parser.add_argument("--Nmax", type=int, required=False, default=3, dest='Nmax', help='Maximum number of molecules for each species. Default 3.')
-parser.add_argument("--Nvals", type=int, required=False, default=100, dest='Nvals', help='Number of eigenvalues to calculate, when --accumulate 1 is set. Default 1000')
-parser.add_argument("--progress", type=int, required=False, default=1, choices=[0,1], help='Print progress during calculation. Default 1.')
+parser.add_argument("--Nvals", type=int, required=False, default=10, dest='Nvals', help='Number of eigenvalues to calculate, when --accumulate 1 is set. Default 1000')
+parser.add_argument("--calculate", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate rate matrix and eigenvalues. If 0, only calculate dimension and quit. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1')
 parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file.')
@@ -73,7 +70,7 @@ def calculate_sparse_elements(rind, filebase):
         #reverse reaction
         k=gas.reverse_rate_constants[rind]
         multiindex2=multiindex+rstoi-pstoi
-        if np.all(multiindex2>=0) and np.all(multiindex2<Nmax) and not np.isnan(k):
+        if np.all(multiindex2>=0) and not np.isnan(k):
             rate=get_rate(multiindex,pstoi,k,reaction)
             j=get_index(multiindex2)
             data.append(rate)
@@ -82,10 +79,7 @@ def calculate_sparse_elements(rind, filebase):
             data.append(-rate)
             rows.append(i)
             columns.append(i)
-    #save to files
-    np.save("%s_data"%(filebase),data)
-    np.save("%s_rows"%(filebase),rows)
-    np.save("%s_columns"%(filebase),columns)
+    return data,rows,columns
 
 #Find all list of species that have specified number of atoms
 def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerated=[],level=0):
@@ -103,22 +97,23 @@ def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerate
     if(avail!=[[],[]]):
         ret_lists=[]
         ret_counts=0
-        ret_levels=[0]
+        max_level=0
         for i in range(len(avail[0])):
             multiindex[avail[0][i]]+=1
             if not (multiindex in previously_enumerated):
                 returned_list,returned_count,returned_level=recursive_list(remaining_atoms-avail[1][i], multiindex, avail, previously_enumerated, level+1)
                 ret_lists+=returned_list
                 ret_counts+=returned_count
-                ret_levels.append(returned_level)
+                if returned_level>max_level:
+                    max_level=returned_level
             multiindex[avail[0][i]]-=1
-        return ret_lists,1+ret_counts,max(ret_levels)
+        return ret_lists,1+ret_counts,max_level
 
     #Base case if no new species can be added
     else:
         #Return list with current multiindex if all atoms exausted
         if np.all(remaining_atoms == np.zeros(len(elements))):
-            return [multiindex],1,level
+            return [multiindex.copy()],1,level
         #Could not exaust atoms with this branch; return nothing
         else:
             return [],1,level
@@ -127,11 +122,7 @@ filebase=args.filebase
 if not os.path.isdir(filebase):
     os.mkdir(filebase)
 mechanism=args.mechanism
-Nmax=args.Nmax
 Nvals=args.Nvals
-rateindex=args.rind
-progress=args.progress
-accumulate=args.accumulate
 gas=ct.Solution(mechanism)
 gas.TP=args.temperature,args.pressure*ct.one_atm
 ns=gas.n_species
@@ -144,61 +135,48 @@ if(len(atoms)!=len(elements)):
     quit()
 start=timeit.default_timer()
 
-if(accumulate==1):
-    #Accumulate sparse data and plot
-    p = re.compile("(.*)_data.npy")
-    filebases=[item for sublist in np.unique([p.findall(name) for name in np.sort(os.listdir(filebase))]) for item in sublist]
-    data=np.array([])
-    columns=np.array([])
-    rows=np.array([])
-    for name in filebases:
-        data=np.append(data,np.load(filebase+"/"+name+"_data.npy"))
-        columns=np.append(columns,np.load(filebase+"/"+name+"_columns.npy"))
-        rows=np.append(rows,np.load(filebase+"/"+name+"_rows.npy"))
-    dim=int(np.max(rows)+1)
-    print("Sparsity: %f"%(1-len(data)*1.0/(dim)**2))
-    print("Average non-zero entry: %f"%(np.linalg.norm(data)/len(data)))
-    ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(dim,dim))
-    eigenvalues,eigenvectors=eigs(ratematrix,k=Nvals,which='LR')
-    np.save(filebase+"/eigenvalues",eigenvalues)
-    np.save(filebase+"/eigenvectors",eigenvectors)
-    rmax=np.abs(np.max(np.real(eigenvalues)))
-    imax=np.max(np.abs(np.imag(eigenvalues[np.where(np.real(eigenvalues)>-2*rmax)[0]])))
-    fig=plt.figure()
-    fig.gca().set_ylabel(r'$\mathrm{Im}\left(\lambda\right)$')
-    fig.gca().set_xlabel(r'$\mathrm{Re}\left(\lambda\right)$')
-    fig.gca().set_xlim(-2*rmax,2*rmax)
-    fig.gca().set_ylim(-2*imax,2*imax)
-    plt.plot(np.real(eigenvalues),np.imag(eigenvalues), 'bx', markersize=3.0)
-    plt.tight_layout()
-    plt.show()
-    fig.savefig(filebase+"/eigenvalues.pdf", bbox_inches='tight')
-    print("\nRuntime: %.1f s"%(timeit.default_timer()-start))
-elif rateindex == None:
-    #Loop through each reaction index and calculate spase elements
-    atoms=np.array(atoms)
-    multiindex=[]
-    last_avail=[[],[]]
-    for i in range(ns):
-        multiindex.append(0)
-        last_avail[0].append(i)
-        last_avail[1].append(np.array([gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements]))
+#Calculate the space of possible states
+atoms=np.array(atoms)
+multiindex=[]
+last_avail=[[],[]]
+for i in range(ns):
+    multiindex.append(0)
+    last_avail[0].append(i)
+    last_avail[1].append(np.array([gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements]))
 
-    multiindices,count,level=recursive_list(atoms,multiindex,last_avail)
-    # print("Generated %i-dimensional space in %.1f s"%(len(multiindices), timeit.default_timer()-start))
-    print(np.sum(atoms), len(multiindices), timeit.default_timer()-start, count, level)
+multiindices,count,level=recursive_list(atoms,multiindex,last_avail)
+dim=len(multiindices)
+print(np.sum(atoms), dim, timeit.default_timer()-start, count, level)
+if args.calculate==0:
     quit()
-    for rind in range(nr):
-        # print('Reaction %i'%(rind))
-        calculate_sparse_elements(rind,filebase+"/%i"%(rind))
-        # if(progress==1):
-            # print('')
-    print("\nRuntime: %.1fs"%(timeit.default_timer()-start))
-else:
-    #Caclulate sparse elements for specified reaction index
-    atoms=np.array(atoms)
-    multiindices=get_states(atoms)
-    print("\nGenerated %i-dimensional space in %.1f s"%(len(multiindices), timeit.default_timer()-start))
-    #print('Reaction %i'%(rateindex))
-    calculate_sparse_elements(rateindex, filebase)
-    print("\nRuntime: %.1fs"%(timeit.default_timer()-start))
+
+#Loop through each reaction index and calculate spase elements
+data=[]
+rows=[]
+columns=[]
+for rind in range(nr):
+    reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind,filebase+"/%i"%(rind))
+    data+=reac_data
+    rows+=reac_rows
+    columns+=reac_columns
+nonzero=np.array([rows,columns])
+print("Sparsity: %f"%(1-len(np.unique(nonzero))*1.0/(dim)**2))
+print("Average non-zero entry: %f"%(np.linalg.norm(data)/len(data)))
+ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(dim,dim))
+np.save(filebase+"/rate.npy",ratematrix)
+eigenvalues,eigenvectors=eigs(ratematrix,k=Nvals,which='LR')
+np.save(filebase+"/eigenvalues",eigenvalues)
+np.save(filebase+"/eigenvectors",eigenvectors)
+rmax=np.abs(np.max(np.real(eigenvalues)))
+imax=np.max(np.abs(np.imag(eigenvalues[np.where(np.real(eigenvalues)>-2*rmax)[0]])))
+fig=plt.figure()
+fig.gca().set_ylabel(r'$\mathrm{Im}\left(\lambda\right)$')
+fig.gca().set_xlabel(r'$\mathrm{Re}\left(\lambda\right)$')
+fig.gca().set_xlim(-2*rmax,2*rmax)
+fig.gca().set_ylim(-2*imax-0.1,2*imax+0.1)
+print(eigenvalues)
+plt.plot(np.real(eigenvalues),np.imag(eigenvalues), 'bx', markersize=3.0)
+plt.tight_layout()
+# plt.show()
+fig.savefig(filebase+"/eigenvalues.pdf", bbox_inches='tight')
+print("\nRuntime: %.1f s"%(timeit.default_timer()-start))
