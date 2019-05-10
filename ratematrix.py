@@ -114,8 +114,6 @@ def recursive_list(remaining_atoms, multiindex, previously_enumerated=[],level=0
         return ret
 
 #Return list of species that can be added to with available atoms
-#We can reduce the amount of recursion if we check here pairs or combinations that can be simultaneously added
-#Maybe with yet another recusive function
 def available_species(remaining_atoms):
     avail=[]
     for i in range(ns):
