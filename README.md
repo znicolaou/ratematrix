@@ -10,11 +10,10 @@ To run the script, activate the environment with
 # Usage
 Running `./ratematrix.py -h` produces the following usage message:
 ```
-usage: ratematrix.py [-h] --filebase FILEBASE [--accumulate {0,1}]
-                     [--mechanism MECHANISM] [--reaction RIND] [--Nmax NMAX]
-                     [--Nvals NVALS] [--progress {0,1}]
-                     [--temperature TEMPERATURE] [--pressure PRESSURE]
-                     [--atoms ATOMS [ATOMS ...]]
+usage: ratematrix.py [-h] --filebase FILEBASE [--mechanism MECHANISM]
+                     [--calculate {0,1}] [--Nvals NVALS] [--plot {0,1}]
+                     [--save {0,1}] [--temperature TEMPERATURE]
+                     [--pressure PRESSURE] [--atoms ATOMS [ATOMS ...]]
 
 Generate a sparse rate matrix from cantera model.
 
@@ -23,30 +22,33 @@ optional arguments:
   --filebase FILEBASE   Base string for npy file output. Three files will be
                         created for each reaction, storing rates, row indices,
                         and column indices.
-  --accumulate {0,1}    If 1, search filebase directory for npy files,
-                        generate sparse matrix, and plot eigenvalues. Default
-                        0.
   --mechanism MECHANISM
                         Mechanism cti file. Default mechanisms/h2o2.cti.
-  --reaction RIND       Reaction index, provided for parallelization. If none
-                        is specified, the program will loop through all
-                        reactions in the model in sequence. Default None.
-  --Nmax NMAX           Maximum number of molecules for each species. Default
-                        3.
-  --Nvals NVALS         Number of eigenvalues to calculate, when --accumulate
-                        1 is set. Default 1000
-  --progress {0,1}      Print progress during calculation. Default 1.
+  --calculate {0,1}     Flag to calculate rate matrix and eigenvalues. If 1,
+                        calculate space, then print args.temperature,
+                        args.pressure, total atoms, dimension, runtime,
+                        recursive calls, recursive levels, sparsity, and Nvals
+                        largest eigenvalues, save rate matrix, eigenvalues,
+                        and eigenvectors, then quit. If 0, only calculate
+                        space, then print total atoms, dimension, runtime,
+                        recursive calls, and recursive levels, then quit.
+                        Default 1.
+  --Nvals NVALS         Number of eigenvalues to print; 0 for all. Default 0.
+  --plot {0,1}          Flag to plot eigenvalues and save
+                        filebase/eigenvales.pdf. Default 1.
+  --save {0,1}          Flag to save the results to filebaserate.npy,
+                        filebaseeigenvalues.npy, and filebaseeigenvectors.npy.
+                        Default 1.
   --temperature TEMPERATURE
                         Temperature in Kelvin. Default 1500.
-  --pressure PRESSURE   Pressure in atm. Default 1
+  --pressure PRESSURE   Pressure in atm. Default 1.
   --atoms ATOMS [ATOMS ...]
                         Number of each atom, in order of their appearance in
-                        the .cti file.
+                        the .cti file. If number of values is not number of
+                        atoms, print the atoms. Default 3 3 3.
   ```
   -----------
 # Examples
-To find the sparse elements for the minimal mechanisms/h2o2.cti file with five hydrogen atoms, five oxygen atoms, and five argon atoms, run  
-`mkdir -p h2o2`  
-`./ratematrix.py --filebase h2o2 --atoms 5 5 5 --mechanism mechanisms/h2o2.cti`  
-To calculate 80 eigenvalues and eigenvectors, and plot and store them, run  
-`./ratematrix.py --accumulate 1 --filebase h2o2 --Nvals 80`  
+To find the sparse elements for the minimal mechanisms/h2o2.cti file with five hydrogen atoms, five oxygen atoms, and five argon atoms, with default temperature and pressure run  
+`./ratematrix.py --filebase data/test --atoms 5 5 5`  
+
