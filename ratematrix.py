@@ -10,14 +10,16 @@ import os
 import re
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import eigs
+from scipy.sparse.linalg import svds
 import argparse
+
 
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
 parser.add_argument("--filebase", type=str, required=True, dest='filebase', help='Base string for npy file output. Three files will be created for each reaction, storing rates, row indices, and column indices.')
 parser.add_argument("--mechanism", type=str, required=False, default='mechanisms/h2o2.cti', dest='mechanism', help='Mechanism cti file. Default mechanisms/h2o2.cti.')
-parser.add_argument("--Nvals", type=int, required=False, default=10, dest='Nvals', help='Number of eigenvalues to calculate, when --accumulate 1 is set. Default 1000')
 parser.add_argument("--calculate", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate rate matrix and eigenvalues. If 0, only calculate dimension and quit. Default 1.')
+parser.add_argument("--plot", type=int, required=False, default=1, choices=[0,1], help='Flag to plot eigenvalues. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1')
 parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file.')
@@ -35,12 +37,12 @@ def get_rate (multiindex, rstoi, k, reaction):
     else: #three body reactions
         ret=0
         for third_body in range(ns):
-            rstoi2=rstoi
-            rstoi2[third_body]+=1
+            newrstoi=rstoi.copy()
+            newrstoi[third_body]+=1
             efficiency=reaction.default_efficiency
             if species[third_body] in reaction.efficiencies.keys():
                 efficiency=reaction.efficiencies[species[third_body]]
-            ret+=efficiency*k*np.product(multiindex**rstoi2)
+            ret+=efficiency*k*np.product(multiindex**newrstoi)
         return ret
 #Main loop over rows to enumerate sparse data
 def calculate_sparse_elements(rind, filebase):
@@ -61,6 +63,9 @@ def calculate_sparse_elements(rind, filebase):
         if np.all(multiindex2>=0.) and not np.isnan(k):
             rate=get_rate(multiindex,rstoi,k,reaction)
             j=get_index(multiindex2)
+            if(np.isnan(rate)):
+                print("what happened?", k, rate, multiindex,rstoi,reaction)
+                quit()
             data.append(rate)
             rows.append(i)
             columns.append(j)
@@ -122,7 +127,6 @@ filebase=args.filebase
 if not os.path.isdir(filebase):
     os.mkdir(filebase)
 mechanism=args.mechanism
-Nvals=args.Nvals
 gas=ct.Solution(mechanism)
 gas.TP=args.temperature,args.pressure*ct.one_atm
 ns=gas.n_species
@@ -146,8 +150,8 @@ for i in range(ns):
 
 multiindices,count,level=recursive_list(atoms,multiindex,last_avail)
 dim=len(multiindices)
-print(np.sum(atoms), dim, timeit.default_timer()-start, count, level)
 if args.calculate==0:
+    print(np.sum(atoms), dim, timeit.default_timer()-start, count, level)
     quit()
 
 #Loop through each reaction index and calculate spase elements
@@ -160,23 +164,19 @@ for rind in range(nr):
     rows+=reac_rows
     columns+=reac_columns
 nonzero=np.array([rows,columns])
-print("Sparsity: %f"%(1-len(np.unique(nonzero))*1.0/(dim)**2))
-print("Average non-zero entry: %f"%(np.linalg.norm(data)/len(data)))
 ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(dim,dim))
-np.save(filebase+"/rate.npy",ratematrix)
-eigenvalues,eigenvectors=eigs(ratematrix,k=Nvals,which='LR')
-np.save(filebase+"/eigenvalues",eigenvalues)
-np.save(filebase+"/eigenvectors",eigenvectors)
-rmax=np.abs(np.max(np.real(eigenvalues)))
-imax=np.max(np.abs(np.imag(eigenvalues[np.where(np.real(eigenvalues)>-2*rmax)[0]])))
-fig=plt.figure()
-fig.gca().set_ylabel(r'$\mathrm{Im}\left(\lambda\right)$')
-fig.gca().set_xlabel(r'$\mathrm{Re}\left(\lambda\right)$')
-fig.gca().set_xlim(-2*rmax,2*rmax)
-fig.gca().set_ylim(-2*imax-0.1,2*imax+0.1)
-print(eigenvalues)
-plt.plot(np.real(eigenvalues),np.imag(eigenvalues), 'bx', markersize=3.0)
-plt.tight_layout()
-# plt.show()
-fig.savefig(filebase+"/eigenvalues.pdf", bbox_inches='tight')
-print("\nRuntime: %.1f s"%(timeit.default_timer()-start))
+np.save(filebase+"/rate.npy",ratematrix.toarray())
+#The dimension is not that big - don't use spase matrix algorithms for eigenvalues
+eigenvalues,eigenvectors=np.linalg.eig(ratematrix.toarray())
+np.save(filebase+"/eigenvalues.npy",eigenvalues)
+np.save(filebase+"/eigenvectors.npy",eigenvectors)
+print(dim, timeit.default_timer()-start, (1-len(np.unique(nonzero))*1.0/(dim)**2), *eigenvalues)
+
+if args.plot==1:
+    fig=plt.figure()
+    fig.gca().set_ylabel(r'$\mathrm{Im}\left(\lambda\right)$')
+    fig.gca().set_xlabel(r'$\mathrm{Re}\left(\lambda\right)$')
+    plt.plot(np.real(eigenvalues),np.imag(eigenvalues), 'bx', markersize=3.0)
+    plt.tight_layout()
+    plt.show()
+    fig.savefig(filebase+"/eigenvalues.pdf", bbox_inches='tight')
