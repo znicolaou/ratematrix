@@ -1,28 +1,24 @@
 #!/usr/bin/env python
-from __future__ import print_function
 import matplotlib
 matplotlib.use("TKAgg")
 import matplotlib.pyplot as plt
 import numpy as np
 import cantera as ct
 import timeit
-import os
-import re
+import argparse
 from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import eigs
-from scipy.sparse.linalg import svds
-import argparse
-
+from scipy.special import factorial
 
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
 parser.add_argument("--filebase", type=str, required=True, dest='filebase', help='Base string for npy file output. Three files will be created for each reaction, storing rates, row indices, and column indices.')
 parser.add_argument("--mechanism", type=str, required=False, default='mechanisms/h2o2.cti', dest='mechanism', help='Mechanism cti file. Default mechanisms/h2o2.cti.')
-parser.add_argument("--calculate", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate rate matrix and eigenvalues. If 0, only calculate dimension and quit. Default 1.')
+parser.add_argument("--calculate", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate rate matrix and eigenvalues. If 1, calculate space, then print dimension, runtime, sparsity, and three smallest eigenvalues, save rate matrix, then eigenvalues, and eigenvectors, then quit. If 0, only calculate space, then print dimension, runtime, recursive calls, and recursive levels, then quit. Default 1.')
 parser.add_argument("--plot", type=int, required=False, default=1, choices=[0,1], help='Flag to plot eigenvalues. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
-parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1')
-parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file.')
+parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
+parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file. If number of values is not number of atoms, print the atoms. Default 3 3 3.')
 args = parser.parse_args()
 
 #Functions for relating multiindices to matrix indices
@@ -30,22 +26,30 @@ def get_multiindex(index):
     return multiindices[index]
 def get_index(multiindex):
     return np.where(multiindices==multiindex)[0][0]
+
 #Function to get the transition rate given concentrations and rate constant
 def get_rate (multiindex, rstoi, k, reaction):
     if reaction.reaction_type == 1: #bimolecular
-        return k*np.product(multiindex**rstoi)
+        # return k*np.product(multiindex**rstoi)
+        if np.all(multiindex>=rstoi):
+            # return k*np.product(multiindex**rstoi)
+            return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))
+        else:
+            return 0.
     else: #three body reactions
         ret=0
         for third_body in range(ns):
-            newrstoi=rstoi.copy()
-            newrstoi[third_body]+=1
-            efficiency=reaction.default_efficiency
-            if species[third_body] in reaction.efficiencies.keys():
-                efficiency=reaction.efficiencies[species[third_body]]
-            ret+=efficiency*k*np.product(multiindex**newrstoi)
+            rstoi[third_body]+=1
+            if np.all(multiindex>=rstoi):
+                efficiency=reaction.default_efficiency
+                if species[third_body] in reaction.efficiencies.keys():
+                    efficiency=reaction.efficiencies[species[third_body]]
+                # ret+=efficiency*k*np.product(multiindex**rstoi)
+                ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))
+            rstoi[third_body]-=1
         return ret
 #Main loop over rows to enumerate sparse data
-def calculate_sparse_elements(rind, filebase):
+def calculate_sparse_elements(rind):
     data=[]
     rows=[]
     columns=[]
@@ -63,9 +67,6 @@ def calculate_sparse_elements(rind, filebase):
         if np.all(multiindex2>=0.) and not np.isnan(k):
             rate=get_rate(multiindex,rstoi,k,reaction)
             j=get_index(multiindex2)
-            if(np.isnan(rate)):
-                print("what happened?", k, rate, multiindex,rstoi,reaction)
-                quit()
             data.append(rate)
             rows.append(i)
             columns.append(j)
@@ -87,6 +88,7 @@ def calculate_sparse_elements(rind, filebase):
     return data,rows,columns
 
 #Find all list of species that have specified number of atoms
+#How much faster would this be if we implemented as a C module and parallelized with OMP?
 def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerated=[],level=0):
     #Add current multiindex to previously enumerated list so it is not repeated
     previously_enumerated.append(multiindex.copy())
@@ -124,8 +126,6 @@ def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerate
             return [],1,level
 #Main
 filebase=args.filebase
-if not os.path.isdir(filebase):
-    os.mkdir(filebase)
 mechanism=args.mechanism
 gas=ct.Solution(mechanism)
 gas.TP=args.temperature,args.pressure*ct.one_atm
@@ -151,7 +151,8 @@ for i in range(ns):
 multiindices,count,level=recursive_list(atoms,multiindex,last_avail)
 dim=len(multiindices)
 if args.calculate==0:
-    print(np.sum(atoms), dim, timeit.default_timer()-start, count, level)
+    #Print dimension, runtime, recursive calls, and recursive levels
+    print(dim, timeit.default_timer()-start, count, level)
     quit()
 
 #Loop through each reaction index and calculate spase elements
@@ -159,18 +160,19 @@ data=[]
 rows=[]
 columns=[]
 for rind in range(nr):
-    reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind,filebase+"/%i"%(rind))
+    reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind)
     data+=reac_data
     rows+=reac_rows
     columns+=reac_columns
 nonzero=np.array([rows,columns])
 ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(dim,dim))
-np.save(filebase+"/rate.npy",ratematrix.toarray())
+np.save(filebase+"rate.npy",ratematrix.toarray())
 #The dimension is not that big - don't use spase matrix algorithms for eigenvalues
 eigenvalues,eigenvectors=np.linalg.eig(ratematrix.toarray())
-np.save(filebase+"/eigenvalues.npy",eigenvalues)
-np.save(filebase+"/eigenvectors.npy",eigenvectors)
-print(dim, timeit.default_timer()-start, (1-len(np.unique(nonzero))*1.0/(dim)**2), *eigenvalues)
+np.save(filebase+"eigenvalues.npy",eigenvalues)
+np.save(filebase+"eigenvectors.npy",eigenvectors)
+#Print dimension, runtime, sparsity, and three smallest eigenvalues
+print(dim, timeit.default_timer()-start, (1-len(np.unique(nonzero))*1.0/(dim)**2), *eigenvalues[-3:])
 
 if args.plot==1:
     fig=plt.figure()
@@ -179,4 +181,4 @@ if args.plot==1:
     plt.plot(np.real(eigenvalues),np.imag(eigenvalues), 'bx', markersize=3.0)
     plt.tight_layout()
     plt.show()
-    fig.savefig(filebase+"/eigenvalues.pdf", bbox_inches='tight')
+    fig.savefig(filebase+"eigenvalues.pdf", bbox_inches='tight')
