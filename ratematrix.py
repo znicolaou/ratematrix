@@ -10,6 +10,15 @@ from scipy.sparse import coo_matrix
 from scipy.sparse.linalg import eigs
 from scipy.special import factorial
 import sys
+import rlist
+
+arr1=1.0*np.arange(10)
+arr2=np.empty(10)
+arr3=rlist.list(arr1,arr2)
+print(arr1)
+print(arr2)
+arr2+=1
+print(arr3)
 
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
