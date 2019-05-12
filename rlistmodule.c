@@ -4,6 +4,45 @@
 #include "numpy/arrayobject.h"
 //#include <omp.h>
 
+
+//Translate this to C code, and call it from rlist_list with data from the parsed numpy arrays
+//We may want to use stacks, lists, queues, or some other C data structures
+// def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerated=[],level=0):
+//     #Add current multiindex to previously enumerated list so it is not repeated
+//     previously_enumerated.append(multiindex.copy())
+//
+//     #Find available species to add out of last available set
+//     avail=[[],[]]
+//     for i in range(len(last_avail[0])):
+//         if (np.all(remaining_atoms-last_avail[1][i]>=0)):
+//             avail[0].append(last_avail[0][i])
+//             avail[1].append(last_avail[1][i])
+//
+//     #Recurse for each new multiindex that has not been previously enumerated and return list of multiindices
+//     if(avail!=[[],[]]):
+//         ret_lists=[]
+//         ret_counts=0
+//         max_level=0
+//         for i in range(len(avail[0])):
+//             multiindex[avail[0][i]]+=1
+//             if not (multiindex in previously_enumerated):
+//                 returned_list,returned_count,returned_level=recursive_list(remaining_atoms-avail[1][i], multiindex, avail, previously_enumerated, level+1)
+//                 ret_lists+=returned_list
+//                 ret_counts+=returned_count
+//                 if returned_level>max_level:
+//                     max_level=returned_level
+//             multiindex[avail[0][i]]-=1
+//         return ret_lists,1+ret_counts,max_level
+//
+//     #Base case if no new species can be added
+//     else:
+//         #Return list with current multiindex if all atoms exausted
+//         if np.all(remaining_atoms == np.zeros(len(elements))):
+//             return [multiindex.copy()],1,level
+//         #Could not exaust atoms with this branch; return nothing
+//         else:
+//             return [],1,level
+
 static PyObject *rlist_list(PyObject *self, PyObject* args){
     PyArrayObject *arr1=NULL;
     PyArrayObject *arr2=NULL;
