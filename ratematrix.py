@@ -7,18 +7,10 @@ import cantera as ct
 import timeit
 import argparse
 from scipy.sparse import coo_matrix
-from scipy.sparse.linalg import eigs
+from scipy.linalg import eig
 from scipy.special import factorial
 import sys
 import rlist
-
-arr1=1.0*np.arange(10)
-arr2=np.empty(10)
-arr3=rlist.list(arr1,arr2)
-print(arr1)
-print(arr2)
-arr2+=1
-print(arr3)
 
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
@@ -158,9 +150,22 @@ last_avail=[[],[]]
 for i in range(ns):
     multiindex.append(0)
     last_avail[0].append(i)
-    last_avail[1].append(np.array([gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0 for el in elements]))
+    last_avail[1].append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
 
-multiindices,count,level=recursive_list(atoms,multiindex,last_avail)
+sp_atoms=[]
+for i in range(ns):
+    multiindex.append(0)
+    sp_atoms.append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
+sp_atoms=np.array(sp_atoms)
+multiindices,count,level=rlist.list(atoms,sp_atoms)
+# start2=timeit.default_timer()
+# multiindices2,count,level=recursive_list(atoms,multiindex,last_avail)
+# print(count, (timeit.default_timer()-start2)/(start2-start))
+# print(len(multiindices),len(multiindices2))
+# quit()
+
+
+
 dim=len(multiindices)
 if args.calculate==0:
     #Print total atoms, dimension, runtime, recursive calls, and recursive levels
@@ -183,15 +188,19 @@ for rind in range(nr):
 nonzero=np.array([rows,columns])
 ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(dim,dim))
 #The dimension is not that big - don't use spase matrix algorithms for eigenvalues
-eigenvalues,eigenvectors=np.linalg.eig(ratematrix.toarray())
+eigenvalues,eigenvectors=eig(ratematrix.toarray(),left=True,right=False)
 if args.save==1:
     np.save(filebase+"ratematrix.npy",ratematrix.toarray())
-    np.save(filebase+"eigenvalues.npy",eigenvalues)
-    np.save(filebase+"eigenvectors.npy",eigenvectors)
+    np.save(filebase+"eigenvalues.npy",np.real(eigenvalues))
+    np.save(filebase+"eigenvectors.npy",np.real(eigenvectors/np.max(eigenvectors,axis=0)))
+    np.save(filebase+"multiindices.npy",multiindices)
+    np.save(filebase+"spatoms.npy",sp_atoms)
+
 #Print dimension, runtime, sparsity, and three smallest eigenvalues
-print(args.temperature, args.pressure, np.sum(atoms), dim, timeit.default_timer()-start, count, level, (1-len(np.unique(nonzero))*1.0/(dim)**2), *np.sort(eigenvalues[-args.Nvals:]))
-out=open(filebase+"out.dat","a+")
-print(args.temperature, args.pressure, np.sum(atoms), dim, timeit.default_timer()-start, count, level, (1-len(np.unique(nonzero))*1.0/(dim)**2), *np.sort(eigenvalues[-args.Nvals:]),file=out)
+print(args.temperature, args.pressure, np.sum(atoms), dim, timeit.default_timer()-start, count, level, (1-len(np.unique(nonzero))*1.0/(dim)**2), *np.sort(np.real(eigenvalues[-args.Nvals:])))
+out=open(filebase+"out.dat","w")
+print(args.temperature, args.pressure, np.sum(atoms), dim, timeit.default_timer()-start, count, level, (1-len(np.unique(nonzero))*1.0/(dim)**2), *np.sort(np.real(eigenvalues[-args.Nvals:])),file=out)
+print(*elements, file=out)
 out.close()
 sys.stdout.flush()
 

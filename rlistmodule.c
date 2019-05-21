@@ -1,84 +1,160 @@
-#define PY_SSIZE_T_CLEAN  /* Make "s#" use Py_ssize_t rather than int. */
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
+#include"rlistmodule.h"
 #include "Python.h"
-#include "numpy/arrayobject.h"
-//#include <omp.h>
 
+static void recursive_list(Multiindex *current, MultiindexVector &last_avail, MultiindexSet &previously_enumerated, MultiindexVector &ret, long int &count, long int &maxlevel, long int level){
+  previously_enumerated.insert(*current);
+  count++;
 
-//Translate this to C code, and call it from rlist_list with data from the parsed numpy arrays
-//We may want to use stacks, lists, queues, or some other C data structures
-// def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerated=[],level=0):
-//     #Add current multiindex to previously enumerated list so it is not repeated
-//     previously_enumerated.append(multiindex.copy())
-//
-//     #Find available species to add out of last available set
-//     avail=[[],[]]
-//     for i in range(len(last_avail[0])):
-//         if (np.all(remaining_atoms-last_avail[1][i]>=0)):
-//             avail[0].append(last_avail[0][i])
-//             avail[1].append(last_avail[1][i])
-//
-//     #Recurse for each new multiindex that has not been previously enumerated and return list of multiindices
-//     if(avail!=[[],[]]):
-//         ret_lists=[]
-//         ret_counts=0
-//         max_level=0
-//         for i in range(len(avail[0])):
-//             multiindex[avail[0][i]]+=1
-//             if not (multiindex in previously_enumerated):
-//                 returned_list,returned_count,returned_level=recursive_list(remaining_atoms-avail[1][i], multiindex, avail, previously_enumerated, level+1)
-//                 ret_lists+=returned_list
-//                 ret_counts+=returned_count
-//                 if returned_level>max_level:
-//                     max_level=returned_level
-//             multiindex[avail[0][i]]-=1
-//         return ret_lists,1+ret_counts,max_level
-//
-//     #Base case if no new species can be added
-//     else:
-//         #Return list with current multiindex if all atoms exausted
-//         if np.all(remaining_atoms == np.zeros(len(elements))):
-//             return [multiindex.copy()],1,level
-//         #Could not exaust atoms with this branch; return nothing
-//         else:
-//             return [],1,level
+  //Base case - check is all atoms have been exhausted, if so add current to ret
+  int exhausted=1;
+  for(int i =0; i < current->na; i++)
+    if(current->atoms[i] != 0)
+      exhausted=0;
+  if(exhausted==1){
+    ret.push_back(*current);
+  }
 
-static PyObject *rlist_list(PyObject *self, PyObject* args){
-    PyArrayObject *arr1=NULL;
-    PyArrayObject *arr2=NULL;
-    int nd1,nd2;
-    npy_intp *dims1, *dims2;
-    double* dptr1, *dptr2;
-
-    if (!PyArg_ParseTuple(args, "O!O!", &PyArray_Type, &arr1, &PyArray_Type, &arr2)) return NULL;
-
-    nd1 = PyArray_NDIM(arr1);
-    dims1 = PyArray_DIMS(arr1);
-    dptr1 = (double *)PyArray_DATA(arr1);
-    nd2 = PyArray_NDIM(arr2);
-    dims2 = PyArray_DIMS(arr2);
-    dptr2 = (double *)PyArray_DATA(arr2);
-    for(int i =0; i<dims1[0]; i++)
-      dptr2[i]=dptr1[i]+1;
-
-    Py_INCREF(arr2);
-    return (PyObject *) arr2;
-
+  //recursive case
+  else{
+    {
+      //Check from the previous set of available species which species are still available
+      MultiindexVector avail;
+      for (auto itr = last_avail.begin(); itr != last_avail.end(); ++itr) {
+        int remove=0;
+        for(int i =0; i < current->na; i++){
+          if(current->atoms[i] - itr->atoms[i] < 0){
+            remove=1;
+          }
+        }
+        if(remove!=1){
+          avail.push_back(*itr);
+        }
+      }
+      //Loop through available species, create the next multiindex, and recurse if next has not been previously enumerated
+      {
+        for (auto itr = avail.begin(); itr != avail.end(); ++itr) {
+          Multiindex *next = new Multiindex();
+          next->na=current->na;
+          next->ns=current->ns;
+          next->atoms=new long int[current->na];
+          next->species=new long int[current->ns];
+          for(int i=0; i<next->ns; i++)
+            next->species[i]=current->species[i]+itr->species[i];
+          for(int i=0; i<next->na; i++)
+            next->atoms[i]=current->atoms[i]-itr->atoms[i];
+          if(previously_enumerated.find(*next)==previously_enumerated.end()){
+            if(level+1>maxlevel)
+              maxlevel=level+1;
+            {
+              recursive_list(next,avail,previously_enumerated,ret,count,maxlevel,level+1);
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
+static PyObject *rlist_list(PyObject *self, PyObject* args){
+    PyArrayObject *atoms, *spatoms;
+    int ndatoms, ndspatoms;//, ndspmultiindices;
+    npy_intp *datoms, *dspatoms;//, *dspmultiindices;
+    long int *atomsptr, *spatomsptr;
+
+    if (!PyArg_ParseTuple(args, "O!O!", &PyArray_Type, &atoms, &PyArray_Type, &spatoms)) return NULL;
+
+    ndatoms = PyArray_NDIM(atoms);
+    ndspatoms = PyArray_NDIM(spatoms);
+    datoms = PyArray_DIMS(atoms);
+    dspatoms = PyArray_DIMS(spatoms);
+    if(!(ndatoms==1 && ndspatoms==2 && dspatoms[1] == datoms[0])){
+      printf("Bad input; atoms must be one dimensional, spatoms must be 2 dimensional, and the size of the second dimension of spatoms must equal the size of atoms.");
+      return NULL;
+    }
+    atomsptr = (long int *)PyArray_DATA(atoms);
+    spatomsptr = (long int *)PyArray_DATA(spatoms);
+
+    long int ns=dspatoms[0];
+    long int na=datoms[0];
+
+    //initialize the current multiindex with zeros and the number of atoms
+    Multiindex *current = new Multiindex();
+    current->na=na;
+    current->ns=ns;
+    current->atoms=new long int[na];
+    current->species=new long int[ns];
+    for (int i=0; i<na; i++)
+      current->atoms[i]=atomsptr[i];
+    for (int i=0; i<ns; i++)
+      current->species[i]=0;
+
+    //initialize avail with each species atoms and indices
+    MultiindexSet previously_enumerated;
+    MultiindexVector avail, list;
+    for (int i =0; i<ns; i++){
+      Multiindex *add = new Multiindex();
+      add->na=na;
+      add->ns=ns;
+      add->atoms=new long int[na];
+      add->species=new long int[ns];
+      for(int j =0; j<na; j++){
+        add->atoms[j]=spatomsptr[na*i+j];
+      }
+      for(int j=0; j<ns; j++){
+        add->species[j]=0;
+      }
+      add->species[i]=1;
+      int remove=0;
+      for(int i =0; i < current->na; i++)
+        if(current->atoms[i] - add->atoms[i] >= 0)
+          remove=1;
+      if(remove==1){
+        avail.push_back(*add);
+      }
+    }
+
+    //I should technically free all the Multiindices I allocated and stored in previously_enumerated.
+    long int count=0;
+    long int maxlevel=0;
+    recursive_list(current, avail, previously_enumerated, list, count, maxlevel, 0);
+    long int* data = new long int[list.size()*ns];
+    int i=0;
+    for (auto itr = list.begin(); itr != list.end(); ++itr) {
+      for(int j=0; j<ns; j++){
+        data[ns*i+j] = itr->species[j];
+      }
+      i++;
+    }
+
+    //Populate the numpy output arrays with the information to return to Python
+    long int *retdims = new long int[2];
+    retdims[0]=list.size();
+    retdims[1]=ns;
+    PyObject *ret0 = PyArray_SimpleNewFromData (2,retdims,NPY_LONG,data);
+    PyObject *ret=Py_BuildValue("(Oii)",ret0,count,maxlevel);
+    Py_INCREF(ret0);
+    Py_INCREF(ret);
+    return ret;
+}
+
+// static void printMultiindex (Multiindex mult) {
+//   printf("atoms: ");
+//   for (int i = 0; i<mult.na; i++){
+//     printf("%li ", mult.atoms[i]);
+//   }
+//   printf("species: ");
+//   for (int i=0; i<mult.ns; i++) {
+//     printf("%li", mult.species[i]);
+//   }
+//   printf("\n");
+// }
+
 static PyMethodDef rlist_methods[] = {
-    {"list",             rlist_list,      METH_VARARGS | METH_KEYWORDS,
-     "Return the recursive list."},
-    {NULL, NULL, 0, NULL}           /* sentinel */
+    {"list", (PyCFunction)rlist_list, METH_VARARGS, "Return the recursive list."},
+    {NULL, NULL}           /* sentinel */
 };
 
-static struct PyModuleDef rlistmodule = {
-    PyModuleDef_HEAD_INIT,
-    "rlist",
-    NULL,
-    -1,
-    rlist_methods
-};
+static struct PyModuleDef rlistmodule = {PyModuleDef_HEAD_INIT, "rlist", NULL, -1, rlist_methods};
 
 PyMODINIT_FUNC PyInit_rlist(void){
     import_array();
