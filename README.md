@@ -1,11 +1,13 @@
 # Files in the ratematrix repository
-The file ratematrix.py contains python code to calculate the sparse matrix elements of the transition rate matrix for a given Cantera .cti model and find eigenvalues and eigenvectors. The folder mechanisms contains a few .cti models.
+The file ratematrix.py contains Python code to calculate the sparse matrix elements of the transition rate matrix for a given Cantera .cti model and find eigenvalues and eigenvectors. The files rlistmodule.c, rlistmodule.h, and setup.py contain a C++ extension module for Python to recursively enumerate the space. The plot.nb file is a Mathematica notebook for plotting results. The folder mechanisms contains a few .cti models.
 
 # System requirements
 The python code has been run with anaconda, which can be downloaded here: https://www.anaconda.com/distribution/. The script requires packes numpy, scipy, cantera, and matplotlib, which can be installed in a new environment after installing anaconda with the shell command  
 `conda create -n cantera_env -c cantera numpy scipy cantera matplotlib`  
 To run the script, activate the environment with  
 `source activate cantera_env`
+Finally, compile and install the extension module with 
+`python setup.py install` 
 
 # Usage
 Running `./ratematrix.py -h` produces the following usage message:
@@ -49,6 +51,6 @@ optional arguments:
   ```
   -----------
 # Examples
-To find the sparse elements for the minimal mechanisms/h2o2.cti file with five hydrogen atoms, five oxygen atoms, and five argon atoms, with default temperature and pressure run  
-`./ratematrix.py --filebase data/test --atoms 5 5 5`  
+To find the sparse elements for the minimal mechanisms/h2o2.cti file with 7 oxygen atoms, 14 hydrogen atoms, and 5 argon atoms, with default temperature and pressure run  
+`./ratematrix.py --filebase data/h2o2test --atoms 7 14 5`
 
