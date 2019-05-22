@@ -4,10 +4,10 @@ The file ratematrix.py contains Python code to calculate the sparse matrix eleme
 # System requirements
 The python code has been run with anaconda, which can be downloaded here: https://www.anaconda.com/distribution/. The script requires packes numpy, scipy, cantera, and matplotlib, which can be installed in a new environment after installing anaconda with the shell command  
 `conda create -n cantera_env -c cantera numpy scipy cantera matplotlib`  
-To run the script, activate the environment with  
-`source activate cantera_env`
-Finally, compile and install the extension module with 
-`python setup.py install` 
+Next, activate the environment with  
+`source activate cantera_env`  
+Finally, compile and install the extension module with   
+`python setup.py install`   
 
 # Usage
 Running `./ratematrix.py -h` produces the following usage message:
