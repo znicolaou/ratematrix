@@ -51,6 +51,8 @@ optional arguments:
   ```
   -----------
 # Examples
-To find the sparse elements for the minimal mechanisms/h2o2.cti file with 7 oxygen atoms, 14 hydrogen atoms, and 5 argon atoms, with default temperature and pressure run  
-`./ratematrix.py --filebase data/h2o2test --atoms 7 14 5`
+To find the sparse elements for the minimal mechanisms/h2o2.cti file with 7 oxygen atoms, 14 hydrogen atoms, and 5 argon atoms, with default temperature and pressure, run  
+`./ratematrix.py --filebase data/h2o2test --atoms 7 14 5`  
+To find the sparse elements for the mechanisms/gri30.cti file with 4 oxygen atoms, 4 hydrogen atoms, 1 carbon atom, 2 nitrogen atoms, and 1 argon atoms, with default temperature and pressure, run  
+`./ratematrix.py --mechanism mechanisms/gri30.cti --atoms 4 4 1 2 1 --filebase data/gritest`  
 
