@@ -91,43 +91,44 @@ def calculate_sparse_elements(rind):
             columns.append(i)
     return data,rows,columns
 
+#This is now implemented in the rlist module
 #Find all list of species that have specified number of atoms
-#How much faster would this be if we implemented as a C module and parallelized with OMP?
-def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerated=[],level=0):
-    #Add current multiindex to previously enumerated list so it is not repeated
-    previously_enumerated.append(multiindex.copy())
+# def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerated=[],level=0):
+#     #Add current multiindex to previously enumerated list so it is not repeated
+#     previously_enumerated.append(multiindex.copy())
+#
+#     #Find available species to add out of last available set
+#     avail=[[],[]]
+#     for i in range(len(last_avail[0])):
+#         if (np.all(remaining_atoms-last_avail[1][i]>=0)):
+#             avail[0].append(last_avail[0][i])
+#             avail[1].append(last_avail[1][i])
+#
+#     #Recurse for each new multiindex that has not been previously enumerated and return list of multiindices
+#     if(avail!=[[],[]]):
+#         ret_lists=[]
+#         ret_counts=0
+#         max_level=0
+#         for i in range(len(avail[0])):
+#             multiindex[avail[0][i]]+=1
+#             if not (multiindex in previously_enumerated):
+#                 returned_list,returned_count,returned_level=recursive_list(remaining_atoms-avail[1][i], multiindex, avail, previously_enumerated, level+1)
+#                 ret_lists+=returned_list
+#                 ret_counts+=returned_count
+#                 if returned_level>max_level:
+#                     max_level=returned_level
+#             multiindex[avail[0][i]]-=1
+#         return ret_lists,1+ret_counts,max_level
+#
+#     #Base case if no new species can be added
+#     else:
+#         #Return list with current multiindex if all atoms exausted
+#         if np.all(remaining_atoms == np.zeros(len(elements))):
+#             return [multiindex.copy()],1,level
+#         #Could not exaust atoms with this branch; return nothing
+#         else:
+#             return [],1,level
 
-    #Find available species to add out of last available set
-    avail=[[],[]]
-    for i in range(len(last_avail[0])):
-        if (np.all(remaining_atoms-last_avail[1][i]>=0)):
-            avail[0].append(last_avail[0][i])
-            avail[1].append(last_avail[1][i])
-
-    #Recurse for each new multiindex that has not been previously enumerated and return list of multiindices
-    if(avail!=[[],[]]):
-        ret_lists=[]
-        ret_counts=0
-        max_level=0
-        for i in range(len(avail[0])):
-            multiindex[avail[0][i]]+=1
-            if not (multiindex in previously_enumerated):
-                returned_list,returned_count,returned_level=recursive_list(remaining_atoms-avail[1][i], multiindex, avail, previously_enumerated, level+1)
-                ret_lists+=returned_list
-                ret_counts+=returned_count
-                if returned_level>max_level:
-                    max_level=returned_level
-            multiindex[avail[0][i]]-=1
-        return ret_lists,1+ret_counts,max_level
-
-    #Base case if no new species can be added
-    else:
-        #Return list with current multiindex if all atoms exausted
-        if np.all(remaining_atoms == np.zeros(len(elements))):
-            return [multiindex.copy()],1,level
-        #Could not exaust atoms with this branch; return nothing
-        else:
-            return [],1,level
 #Main
 filebase=args.filebase
 mechanism=args.mechanism
@@ -158,13 +159,7 @@ for i in range(ns):
     sp_atoms.append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
 sp_atoms=np.array(sp_atoms)
 multiindices,count,level=rlist.list(atoms,sp_atoms)
-# start2=timeit.default_timer()
-# multiindices2,count,level=recursive_list(atoms,multiindex,last_avail)
-# print(count, (timeit.default_timer()-start2)/(start2-start))
-# print(len(multiindices),len(multiindices2))
-# quit()
-
-
+# multiindices,count,level=recursive_list(atoms,multiindex,last_avail)
 
 dim=len(multiindices)
 if args.calculate==0:
@@ -188,11 +183,12 @@ for rind in range(nr):
 nonzero=np.array([rows,columns])
 ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(dim,dim))
 #The dimension is not that big - don't use spase matrix algorithms for eigenvalues
-eigenvalues,eigenvectors=eig(ratematrix.toarray(),left=True,right=False)
+eigenvalues,eigenvectors=eig(np.transpose(ratematrix.toarray()))
+sorted=np.argsort(eigenvalues)
 if args.save==1:
     np.save(filebase+"ratematrix.npy",ratematrix.toarray())
-    np.save(filebase+"eigenvalues.npy",np.real(eigenvalues))
-    np.save(filebase+"eigenvectors.npy",np.real(eigenvectors/np.max(eigenvectors,axis=0)))
+    np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
+    np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
     np.save(filebase+"multiindices.npy",multiindices)
     np.save(filebase+"spatoms.npy",sp_atoms)
 

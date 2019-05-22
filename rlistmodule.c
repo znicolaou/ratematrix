@@ -4,65 +4,53 @@
 static void recursive_list(Multiindex *current, MultiindexVector &last_avail, MultiindexSet &previously_enumerated, MultiindexVector &ret, long int &count, long int &maxlevel, long int level){
   previously_enumerated.insert(*current);
   count++;
-
   //Base case - check is all atoms have been exhausted, if so add current to ret
   int exhausted=1;
   for(int i =0; i < current->na; i++)
     if(current->atoms[i] != 0)
       exhausted=0;
-  if(exhausted==1){
+  if(exhausted==1)
     ret.push_back(*current);
-  }
-
-  //recursive case
+  //recursive cases
   else{
-    {
-      //Check from the previous set of available species which species are still available
-      MultiindexVector avail;
-      for (auto itr = last_avail.begin(); itr != last_avail.end(); ++itr) {
-        int remove=0;
-        for(int i =0; i < current->na; i++){
-          if(current->atoms[i] - itr->atoms[i] < 0){
-            remove=1;
-          }
-        }
-        if(remove!=1){
-          avail.push_back(*itr);
-        }
-      }
-      //Loop through available species, create the next multiindex, and recurse if next has not been previously enumerated
-      {
-        for (auto itr = avail.begin(); itr != avail.end(); ++itr) {
-          Multiindex *next = new Multiindex();
-          next->na=current->na;
-          next->ns=current->ns;
-          next->atoms=new long int[current->na];
-          next->species=new long int[current->ns];
-          for(int i=0; i<next->ns; i++)
-            next->species[i]=current->species[i]+itr->species[i];
-          for(int i=0; i<next->na; i++)
-            next->atoms[i]=current->atoms[i]-itr->atoms[i];
-          if(previously_enumerated.find(*next)==previously_enumerated.end()){
-            if(level+1>maxlevel)
-              maxlevel=level+1;
-            {
-              recursive_list(next,avail,previously_enumerated,ret,count,maxlevel,level+1);
-            }
-          }
-        }
+    //Check from the previous set of available species which species are still available
+    MultiindexVector avail;
+    avail.reserve(last_avail.size());
+    for (auto itr = last_avail.begin(); itr != last_avail.end(); ++itr) {
+      int remove=0;
+      for(int i =0; i < current->na; i++)
+        if(current->atoms[i] - itr->atoms[i] < 0)
+          remove=1;
+      if(remove==0)
+        avail.push_back(*itr);
+    }
+    //Loop through available species, create the next multiindex, and recurse if next has not been previously enumerated
+    for (auto itr = avail.begin(); itr != avail.end(); ++itr) {
+      Multiindex *next = new Multiindex();
+      next->na=current->na;
+      next->ns=current->ns;
+      next->atoms=new long int[current->na];
+      next->species=new long int[current->ns];
+      for(int i=0; i<next->ns; i++)
+        next->species[i]=current->species[i]+itr->species[i];
+      for(int i=0; i<next->na; i++)
+        next->atoms[i]=current->atoms[i]-itr->atoms[i];
+      if(previously_enumerated.find(*next)==previously_enumerated.end()){
+        if(level+1>maxlevel)
+          maxlevel=level+1;
+        recursive_list(next,avail,previously_enumerated,ret,count,maxlevel,level+1);
       }
     }
   }
 }
 
 static PyObject *rlist_list(PyObject *self, PyObject* args){
+    //Parse arguments and store in C arrays
     PyArrayObject *atoms, *spatoms;
-    int ndatoms, ndspatoms;//, ndspmultiindices;
-    npy_intp *datoms, *dspatoms;//, *dspmultiindices;
+    int ndatoms, ndspatoms;
+    npy_intp *datoms, *dspatoms;
     long int *atomsptr, *spatomsptr;
-
     if (!PyArg_ParseTuple(args, "O!O!", &PyArray_Type, &atoms, &PyArray_Type, &spatoms)) return NULL;
-
     ndatoms = PyArray_NDIM(atoms);
     ndspatoms = PyArray_NDIM(spatoms);
     datoms = PyArray_DIMS(atoms);
@@ -73,9 +61,8 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     }
     atomsptr = (long int *)PyArray_DATA(atoms);
     spatomsptr = (long int *)PyArray_DATA(spatoms);
-
-    long int ns=dspatoms[0];
-    long int na=datoms[0];
+    long int ns=dspatoms[0]; //num species
+    long int na=datoms[0]; //num atoms
 
     //initialize the current multiindex with zeros and the number of atoms
     Multiindex *current = new Multiindex();
@@ -88,7 +75,7 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     for (int i=0; i<ns; i++)
       current->species[i]=0;
 
-    //initialize avail with each species atoms and indices
+    //initialize avail with each available species' atoms and indices
     MultiindexSet previously_enumerated;
     MultiindexVector avail, list;
     for (int i =0; i<ns; i++){
@@ -113,10 +100,14 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
       }
     }
 
-    //I should technically free all the Multiindices I allocated and stored in previously_enumerated.
+    //Run the recursive listing
     long int count=0;
     long int maxlevel=0;
     recursive_list(current, avail, previously_enumerated, list, count, maxlevel, 0);
+    //We should technically free all the Multiindices allocated and stored in previously_enumerated that were not returned
+    //Memory is not the biggest constraint though at the moment
+
+    //Populate the numpy output arrays with the information to return to Python
     long int* data = new long int[list.size()*ns];
     int i=0;
     for (auto itr = list.begin(); itr != list.end(); ++itr) {
@@ -125,8 +116,6 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
       }
       i++;
     }
-
-    //Populate the numpy output arrays with the information to return to Python
     long int *retdims = new long int[2];
     retdims[0]=list.size();
     retdims[1]=ns;
@@ -137,22 +126,7 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     return ret;
 }
 
-// static void printMultiindex (Multiindex mult) {
-//   printf("atoms: ");
-//   for (int i = 0; i<mult.na; i++){
-//     printf("%li ", mult.atoms[i]);
-//   }
-//   printf("species: ");
-//   for (int i=0; i<mult.ns; i++) {
-//     printf("%li", mult.species[i]);
-//   }
-//   printf("\n");
-// }
-
-static PyMethodDef rlist_methods[] = {
-    {"list", (PyCFunction)rlist_list, METH_VARARGS, "Return the recursive list."},
-    {NULL, NULL}           /* sentinel */
-};
+static PyMethodDef rlist_methods[] = {{"list", (PyCFunction)rlist_list, METH_VARARGS, "Return the recursive list."}, {NULL, NULL}};
 
 static struct PyModuleDef rlistmodule = {PyModuleDef_HEAD_INIT, "rlist", NULL, -1, rlist_methods};
 

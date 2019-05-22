@@ -4,7 +4,6 @@
 #include "numpy/arrayobject.h"
 #include <unordered_set>
 #include <vector>
-// #include <omp.h>
 using namespace std;
 
 typedef struct Multiindex{
@@ -13,27 +12,25 @@ typedef struct Multiindex{
 } Multiindex;
 
 struct MultiindexHash {
-	public: size_t operator()(const Multiindex & ind) const {
+	public:
+		size_t operator()(const Multiindex & ind) const {
     int ret=0;
-    for(int i = 0; i<(ind.ns); i++){
-      ret += pow(ind.ns, i)*(ind.species)[i];
-    }
+    for(int i = 0; i<(ind.ns); i++)
+      ret += pow(ind.ns, i)*ind.species[i];
 		return std::hash<int>()(ret);
 	}
 };
+
 struct EqualMultiindices {
-	public: bool operator()(const Multiindex & ind1, const Multiindex & ind2) const {
+	public:
+		bool operator()(const Multiindex & ind1, const Multiindex & ind2) const {
     bool ret=true;
-    for(int i = 0; i < (ind1.ns); i++){
-      if((ind1.species)[i] != (ind2.species)[i])
+    for(int i = 0; i < (ind1.ns); i++)
+      if(ind1.species[i] != ind2.species[i])
         ret=false;
-    }
 		return ret;
 	}
 };
 
-//We should use a unordered_map with values of atoms and keys of multiindices for the available set
-// typedef unordered_set<Multiindex, MultiindexHash, EqualMultiindices> MultiindexSet;
 typedef unordered_set<Multiindex, MultiindexHash, EqualMultiindices> MultiindexSet;
 typedef vector<Multiindex> MultiindexVector;
-// static void printMultiindex (Multiindex mult);
