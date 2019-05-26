@@ -1,11 +1,11 @@
 #!/bin/bash
-N_temp=10
-N_press=10
+N_temp=25
+N_press=25
 press0=0.5
 press1=10
 temp0=1000
 temp1=2500
-atoms="5 5 5"
+atoms="5 10 5"
 filebase0=data/sweep
 save=0
 

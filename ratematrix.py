@@ -11,6 +11,7 @@ from scipy.linalg import eig
 from scipy.special import factorial
 import sys
 import rlist
+import tlist
 
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
@@ -158,7 +159,8 @@ for i in range(ns):
     multiindex.append(0)
     sp_atoms.append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
 sp_atoms=np.array(sp_atoms)
-multiindices,count,level=rlist.list(atoms,sp_atoms)
+multiindices,count,level=rlist.list2(atoms,sp_atoms)
+# multiindices,count,level=rlist.list(atoms,sp_atoms)
 # multiindices,count,level=recursive_list(atoms,multiindex,last_avail)
 
 dim=len(multiindices)

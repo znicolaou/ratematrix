@@ -4,6 +4,7 @@
 #include "numpy/arrayobject.h"
 #include <unordered_set>
 #include <vector>
+#include <omp.h>
 using namespace std;
 
 typedef struct Multiindex{
