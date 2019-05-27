@@ -4,3 +4,4 @@ rm -r build; python setup.py build; g++ -bundle -undefined dynamic_lookup -L/Use
 rm -r build; python setup.py build; g++ -bundle -undefined dynamic_lookup -L/Users/zack/anaconda2/envs/test_env/lib -arch x86_64 build/temp.macosx-10.7-x86_64-3.7/rlistmodule.o -o build/lib.macosx-10.7-x86_64-3.7/rlist.cpython-37m-darwin.so -fopenmp; python setup.py install
 
 
+rm -r build; python setup.py build; g++ -pthread -shared -B /home/zack/anaconda3/envs/test_env/compiler_compat -L/home/zack/anaconda3/envs/test_env/lib -Wl,-rpath=/home/zack/anaconda3/envs/test_env/lib -Wl,--no-as-needed -Wl,--sysroot=/ build/temp.linux-x86_64-3.7/rlistmodule.o -o build/lib.linux-x86_64-3.7/rlist.cpython-37m-x86_64-linux-gnu.so -fopenmp; python setup.py install

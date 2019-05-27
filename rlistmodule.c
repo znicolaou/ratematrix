@@ -116,49 +116,60 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     {
       printf("%.3f  \r",completed*1.0/maxmax);
       fflush(stdout);
-      Multiindex *current = new Multiindex();
+      Multiindex current;
+      // Multiindex *current = new Multiindex();
       MultiindexSet previously_enumerated;
       MultiindexVector avail;
       //initialize the current multiindex with zeros and the number of atoms
-      current->na=na;
-      current->ns=ns;
-      current->atoms=new long int[na];
-      current->species=new long int[ns];
+      // current->na=na;
+      // current->ns=ns;
+      // current->atoms=new long int[na];
+      // current->species=new long int[ns];
+      // for (int i=0; i<na; i++)
+      //   current->atoms[i]=atomsptr[i]-k*spatomsptr[na*maxind+i];
+      // for (int i=0; i<ns; i++)
+      //   current->species[i]=0;
+      // current->species[maxind]=k;
+      current.na=na;
+      current.ns=ns;
+      current.atoms=new long int[na];
+      current.species=new long int[ns];
       for (int i=0; i<na; i++)
-        current->atoms[i]=atomsptr[i]-k*spatomsptr[na*maxind+i];
+        current.atoms[i]=atomsptr[i]-k*spatomsptr[na*maxind+i];
       for (int i=0; i<ns; i++)
-        current->species[i]=0;
-      current->species[maxind]=k;
+        current.species[i]=0;
+      current.species[maxind]=k;
 
       //initialize avail with each available species' atoms and indices
       for (int i =0; i<ns; i++){
         //Don't add maxind species to avail - it is fixed.
         if(i!=maxind){
-          Multiindex *add = new Multiindex();
-          add->na=na;
-          add->ns=ns;
-          add->atoms=new long int[na];
-          add->species=new long int[ns];
+
+          Multiindex add;
+          add.na=na;
+          add.ns=ns;
+          add.atoms=new long int[na];
+          add.species=new long int[ns];
           for(int j =0; j<na; j++){
-            add->atoms[j]=spatomsptr[na*i+j];
+            add.atoms[j]=spatomsptr[na*i+j];
           }
           for(int j=0; j<ns; j++){
-            add->species[j]=0;
+            add.species[j]=0;
           }
-          add->species[i]=1;
+          add.species[i]=1;
           int remove=0;
-          for(int i =0; i < current->na; i++)
-            if(current->atoms[i] - add->atoms[i] >= 0)
+          for(int i =0; i < current.na; i++)
+            if(current.atoms[i] - add.atoms[i] >= 0)
               remove=1;
           if(remove==1){
-            avail.push_back(*add);
+            avail.push_back(add);
           }
         }
       }
       //Run the recursive listing
       counts[k]=0;
       maxlevels[k]=0;
-      recursive_list(current, avail, previously_enumerated, lists[k], counts[k], maxlevels[k], 0);
+      recursive_list(&current, avail, previously_enumerated, lists[k], counts[k], maxlevels[k], 0);
       completed++;
     }
 
