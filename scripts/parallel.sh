@@ -1,7 +1,7 @@
 #!/bin/bash
-threads=8
+threads=32
 
-for num in `seq 3 4`; do
+for num in `seq 3 40`; do
 
 atoms="$num $num $num"
 filebase0=data/parallel$num
@@ -18,7 +18,7 @@ for i in `seq 0 $num`; do
       sleep 0.01
       js=`jobs | wc -l`
     done
-    ./ratematrix.py --filebase ${filebase0}/${i}_${j} --atoms $atoms --fix 1 $i 2 $j --calculate 0 &
+    ./ratematrix.py --filebase ${filebase0}/${i}_${j} --atoms $atoms --fix 1 $i 2 $j 8 $num --calculate 0 &
   done
 done
 end=`date +%s`
@@ -40,4 +40,5 @@ rm ${filebase0}pout.dat
 ./ratematrix.py --filebase ${filebase0} --atoms $atoms --fix 1 $i 2 $j --calculate 0 --accumulate 1
 rm -r $filebase0
 
+cat ${filebase0}out.dat >> data/runtimes3out.dat
 done
