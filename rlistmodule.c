@@ -201,6 +201,7 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
       }
       i++;
     }
+
     long int *retdims = new long int[2];
     retdims[0]=list.size();
     retdims[1]=ns;
@@ -208,6 +209,17 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     PyObject *ret=Py_BuildValue("(Oii)",ret0,count,maxlevel);
     Py_INCREF(ret0);
     Py_INCREF(ret);
+
+    for (auto itr = list.begin(); itr != list.end(); ++itr) {
+      delete[] itr->species;
+      delete[] itr->atoms;
+    }
+    delete[] lists;
+    delete[] counts;
+    delete[] maxlevels;
+    delete[] retdims;
+
+
     return ret;
 }
 
