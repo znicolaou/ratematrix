@@ -8,8 +8,9 @@
 using namespace std;
 
 typedef struct Multiindex{
-	int na, ns;
-	long int *species, *atoms;
+	short int na, ns;
+	short int *species, *atoms;
+	Multiindex(long int Na, long int Ns){na=Na; ns=Ns; species=(short int*)malloc(ns*sizeof(short int)); atoms=(short int*)malloc(na*sizeof(short int));};
 } Multiindex;
 
 struct MultiindexHash {

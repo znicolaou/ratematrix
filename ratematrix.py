@@ -23,6 +23,7 @@ parser.add_argument("--save", type=int, required=False, default=1, choices=[0,1]
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
 parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file. If number of values is not number of atoms, print the atoms. Default 3 3 3.')
+parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers. Include each species index followed by the number of molecules to fix.')
 args = parser.parse_args()
 
 #Functions for relating multiindices to matrix indices
@@ -91,44 +92,6 @@ def calculate_sparse_elements(rind):
             columns.append(i)
     return data,rows,columns
 
-#This is now implemented in the rlist module
-#Find all list of species that have specified number of atoms
-# def recursive_list(remaining_atoms, multiindex, last_avail, previously_enumerated=[],level=0):
-#     #Add current multiindex to previously enumerated list so it is not repeated
-#     previously_enumerated.append(multiindex.copy())
-#
-#     #Find available species to add out of last available set
-#     avail=[[],[]]
-#     for i in range(len(last_avail[0])):
-#         if (np.all(remaining_atoms-last_avail[1][i]>=0)):
-#             avail[0].append(last_avail[0][i])
-#             avail[1].append(last_avail[1][i])
-#
-#     #Recurse for each new multiindex that has not been previously enumerated and return list of multiindices
-#     if(avail!=[[],[]]):
-#         ret_lists=[]
-#         ret_counts=0
-#         max_level=0
-#         for i in range(len(avail[0])):
-#             multiindex[avail[0][i]]+=1
-#             if not (multiindex in previously_enumerated):
-#                 returned_list,returned_count,returned_level=recursive_list(remaining_atoms-avail[1][i], multiindex, avail, previously_enumerated, level+1)
-#                 ret_lists+=returned_list
-#                 ret_counts+=returned_count
-#                 if returned_level>max_level:
-#                     max_level=returned_level
-#             multiindex[avail[0][i]]-=1
-#         return ret_lists,1+ret_counts,max_level
-#
-#     #Base case if no new species can be added
-#     else:
-#         #Return list with current multiindex if all atoms exausted
-#         if np.all(remaining_atoms == np.zeros(len(elements))):
-#             return [multiindex.copy()],1,level
-#         #Could not exaust atoms with this branch; return nothing
-#         else:
-#             return [],1,level
-
 #Main
 filebase=args.filebase
 mechanism=args.mechanism
@@ -139,6 +102,7 @@ nr=gas.n_reactions
 species=gas.species_names
 elements=gas.element_names
 atoms=np.array(args.atoms)
+fixed=np.array(args.fix)
 if(len(atoms)!=len(elements)):
     print("elements are: ", *elements)
     quit()
@@ -158,9 +122,12 @@ for i in range(ns):
     multiindex.append(0)
     sp_atoms.append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
 sp_atoms=np.array(sp_atoms)
-# multiindices,count,level=rlist.list2(atoms,sp_atoms)
-multiindices,count,level=rlist.list(atoms,sp_atoms)
-# multiindices,count,level=recursive_list(atoms,multiindex,last_avail)
+
+remove_atoms = np.zeros(len(atoms));
+for i in range(0,len(fixed),2):
+    remove_atoms += fixed[i+1]*sp_atoms[fixed[i]]
+
+multiindices,count,level=rlist.list(atoms-remove_atoms.astype(int), sp_atoms, fixed[::2].astype(int))
 
 dim=len(multiindices)
 if args.calculate==0:
