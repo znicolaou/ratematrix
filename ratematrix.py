@@ -141,8 +141,7 @@ if args.accumulate==0:
     print(atot, dim, runtime, count, level)
     print(atot, dim, runtime, count, level, file=out)
     out.close()
-    fflush(stdout)
-
+    sys.stdout.flush()
 else:
     if os.path.isfile(filebase+"multiindices.npy"):
         multiindices=np.load(filebase+"multiindices.npy")
@@ -152,6 +151,7 @@ else:
         for file in mfiles:
             multiindices+=np.load(filebase+"/"+file).tolist()
         multiindices=np.array(multiindices)
+        np.save(filebase+"multiindices.npy",multiindices)
 
     file=open(filebase+"out.dat","r")
     instrings=file.readline().split()

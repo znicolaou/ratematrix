@@ -34,6 +34,10 @@ done
 dim=`awk '{dim+=$2}END{print dim}' ${filebase0}pout.dat`
 count=`awk '{count+=$4}END{print count}' ${filebase0}pout.dat`
 level=`awk '{if($5>max){max=$5}}END{print max}' ${filebase0}pout.dat`
+echo "$((3*num)) $dim $((end-start)) $count $level" >> ${filebase0}out.dat
+rm ${filebase0}pout.dat
 
-echo "$((3*num)) $dim $((end-start)) $count $level" > ${filebase0}out.dat
+./ratematrix.py --filebase ${filebase0} --atoms $atoms --fix 1 $i 2 $j --calculate 0 --accumulate 1
+rm -r $filebase0
+
 done
