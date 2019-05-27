@@ -9,26 +9,28 @@ atoms="5 10 5"
 filebase0=data/sweep
 save=0
 
-if [ -f ${filebase0}out.dat ]; then rm ${filebase0}out.dat; fi
+rm -r ${filebase0}*
+./ratematrix.py --atoms $atoms --filebase ${filebase0} --plot 0 --calculate 0
+
+mkdir -p $filebase0
 for i in `seq 0 $N_temp`; do
   for j in `seq 0 $N_press`; do
     temp=`bc -l <<<"${temp0}+(${temp1}-${temp0})*${i}*1.0/${N_temp}"`
     press=`bc -l <<<"${press0}+(${press1}-${press0})*${j}*1.0/${N_press}"`
-    filebase=${filebase0}/${i}/${j}/
-    mkdir -p $filebase
     echo $temp $press
-    echo "./ratematrix.py --temperature $temp --pressure $press --atoms $atoms --filebase ${filebase} --plot 0 --save $save"
-    ./ratematrix.py --temperature $temp --pressure $press --atoms $atoms --filebase ${filebase} --plot 0 --save $save &
+    filebase=$filebase0/${i}_${j}
+    cp ${filebase0}multiindices.npy ${filebase}multiindices.npy
+    cp ${filebase0}out.dat ${filebase}out.dat
+    ./ratematrix.py --temperature $temp --pressure $press --atoms $atoms --filebase ${filebase} --accumulate 1 --plot 0 --save 0 --calculate 1 &
   done
   wait
-
-  for j in `seq 0 $N_press`; do
-    filebase=${filebase0}/${i}/${j}/
-    cat ${filebase}out.dat >> ${filebase0}out.dat
-    rm ${filebase}out.dat
-    rmdir $filebase
-  done
-  rmdir ${filebase0}/${i}
-
 done
-rmdir ${filebase0}
+
+for i in `seq 0 $N_temp`; do
+  for j in `seq 0 $N_press`; do
+    filebase=$filebase0/${i}_${j}
+    rm ${filebase}multiindices.npy
+    tail -n 1 ${filebase}out.dat >> ${filebase0}out.dat
+    rm ${filebase}out.dat
+  done
+done

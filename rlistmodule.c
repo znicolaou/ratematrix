@@ -124,7 +124,6 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     retdims[0]=list.size();
     retdims[1]=ns;
     PyObject *ret0 = PyArray_SimpleNewFromData (2,retdims,NPY_LONG,data);
-    delete[] data;
     PyObject *ret=Py_BuildValue("(Oii)",ret0,count,maxlevel);
     Py_INCREF(ret0);
     Py_INCREF(ret);
