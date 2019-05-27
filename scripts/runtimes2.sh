@@ -1,6 +1,6 @@
 #!/bin/bash
 Natoms0=3
-Natoms1=30
+Natoms1=20
 filebase=data/runtimes2
 for i in `seq $Natoms0 $Natoms1`; do
   echo $i
