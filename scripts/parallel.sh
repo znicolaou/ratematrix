@@ -28,5 +28,5 @@ dim=`awk '{dim+=$2}END{print dim}' ${filebase0}.out`
 count=`awk '{count+=$4}END{print count}' ${filebase0}.out`
 level=`awk '{if($5>max){max=$5}}END{print max}' ${filebase0}.out`
 
-echo "$((3*num)) $((end-start)) $dim $count $level"
+echo "$((3*num)) $dim $((end-start)) $count $level"
 done
