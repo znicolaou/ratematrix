@@ -1,9 +1,14 @@
 #!/bin/bash
 Natoms0=3
-Natoms1=20
+Natoms1=30
 filebase=data/runtimes2
 for i in `seq $Natoms0 $Natoms1`; do
   echo $i
-  echo "./ratematrix.py --atoms $i $i $i --filebase $filebase --plot 0 --calculate 0 "
-  ./ratematrix.py --atoms $i $i $i --filebase $filebase --plot 0 --calculate 0
+  ./ratematrix.py --atoms $i $i $i --filebase ${filebase}_${i} --plot 0 --calculate 0 &
+done
+wait
+
+for i in `seq $Natoms0 $Natoms1`; do
+cat ${filebase}_${i}out.dat >> ${filebase}out.dat
+rm ${filebase}_${i}out.dat
 done
