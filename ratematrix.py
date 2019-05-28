@@ -138,8 +138,8 @@ if args.accumulate==0:
 
     np.save(filebase+"multiindices.npy",multiindices)
     out=open(filebase+"out.dat","w")
-    print(atot, dim, runtime, count, level)
-    print(atot, dim, runtime, count, level, file=out)
+    print(atot, dim, runtime, count, level, *elements)
+    print(atot, dim, runtime, count, level, *elements, file=out)
     out.close()
     sys.stdout.flush()
 else:
