@@ -21,6 +21,8 @@ parser.add_argument("--calculate", type=int, required=False, default=1, choices=
 parser.add_argument("--plot", type=int, required=False, default=1, choices=[0,1], help='Flag to plot eigenvalues and save filebase/eigenvales.pdf. Default 1.')
 parser.add_argument("--save", type=int, required=False, default=1, choices=[0,1], help='Flag to save the results to filebaserate.npy, filebaseeigenvalues.npy, and filebaseeigenvectors.npy. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
+parser.add_argument("--adiabatic", type=int, required=False, default=0, help='Convert energy from reactions to heat. The temperature will specify the reference multiindix specified with --reference. ')
+parser.add_argument("--reference", type=int, nargs='+', required=False, default=[2, 0, 0, 1, 0, 0, 0, 0, 0], help='Reference multiindex at which the temperature is specified. Default 6  0  0  3  0  0  0  0  3.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
 parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file. If number of values is not number of atoms, print the atoms. Default 3 3 3.')
 parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
@@ -37,10 +39,9 @@ def get_index(multiindex):
 #Function to get the transition rate given concentrations and rate constant
 def get_rate (multiindex, rstoi, k, reaction):
     if reaction.reaction_type == 1: #bimolecular
-        # return k*np.product(multiindex**rstoi)
         if np.all(multiindex>=rstoi):
-            # return k*np.product(multiindex**rstoi)
-            return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))
+            # return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))
+            return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*quant.volume)
         else:
             return 0.
     else: #three body reactions
@@ -51,8 +52,8 @@ def get_rate (multiindex, rstoi, k, reaction):
                 efficiency=reaction.default_efficiency
                 if species[third_body] in reaction.efficiencies.keys():
                     efficiency=reaction.efficiencies[species[third_body]]
-                # ret+=efficiency*k*np.product(multiindex**rstoi)
-                ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))**2
+                # ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))**2
+                ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*quant.volume)**2
             rstoi[third_body]-=1
         return ret
 #Main loop over rows to enumerate sparse data
@@ -67,9 +68,24 @@ def calculate_sparse_elements(rind):
     for  i in range(len(multiindices)):
         stop=timeit.default_timer()
         multiindex=get_multiindex(i)
-        gas.X=multiindex
+        # gas.X=multiindex
+
+
         #forward reaction
-        k=gas.forward_rate_constants[rind]
+        if(args.adiabatic == 1):
+            #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
+            try:
+                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+                k=gas.forward_rate_constants[rind]
+            except:
+                gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
+                quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+                k=0
+        else:
+            gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
+            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+            k=gas.forward_rate_constants[rind]
         multiindex2=multiindex-rstoi+pstoi
         if np.all(multiindex2>=0.) and not np.isnan(k):
             rate=get_rate(multiindex,rstoi,k,reaction)
@@ -81,7 +97,20 @@ def calculate_sparse_elements(rind):
             rows.append(i)
             columns.append(i)
         #reverse reaction
-        k=gas.reverse_rate_constants[rind]
+        if(args.adiabatic == 1):
+            #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
+            try:
+                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+                k=gas.reverse_rate_constants[rind]
+            except:
+                gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
+                quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+                k=0
+        else:
+            gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
+            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+            k=gas.reverse_rate_constants[rind]
         multiindex2=multiindex+rstoi-pstoi
         if np.all(multiindex2>=0) and not np.isnan(k):
             rate=get_rate(multiindex,pstoi,k,reaction)
@@ -163,6 +192,15 @@ else:
 
 if args.calculate==1:
     #Loop through each reaction index and calculate spase elements
+    gas=ct.Solution(mechanism)
+    gas.TPX=args.temperature,args.pressure*ct.one_atm,args.reference
+    refquant=ct.Quantity(gas,moles=np.sum(args.reference)/ct.avogadro)
+    refenth=refquant.enthalpy
+    refmass=refquant.mass
+    refvol=refquant.volume
+    quant=ct.Quantity(gas, moles=np.sum(args.reference)/ct.avogadro)
+
+
     data=[]
     rows=[]
     columns=[]
