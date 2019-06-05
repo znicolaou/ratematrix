@@ -1,4 +1,6 @@
 #!/usr/bin/env python
+import os
+os.environ["OMP_NUM_THREADS"]="1"
 import matplotlib
 matplotlib.use("TKAgg")
 import matplotlib.pyplot as plt
@@ -10,7 +12,6 @@ from scipy.sparse import coo_matrix
 from scipy.linalg import eig
 from scipy.special import factorial
 import sys
-import os
 import rlist
 
 #Command-line arguments
@@ -89,6 +90,7 @@ def calculate_sparse_elements(rind):
         multiindex2=multiindex-rstoi+pstoi
         if np.all(multiindex2>=0.) and not np.isnan(k):
             rate=get_rate(multiindex,rstoi,k,reaction)
+            # print(multiindex, multiindex2, k, rate)
             j=get_index(multiindex2)
             data.append(rate)
             rows.append(i)
@@ -106,7 +108,7 @@ def calculate_sparse_elements(rind):
             except:
                 gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-                k=0
+                k=0.0
         else:
             gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
             quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
@@ -114,6 +116,7 @@ def calculate_sparse_elements(rind):
         multiindex2=multiindex+rstoi-pstoi
         if np.all(multiindex2>=0) and not np.isnan(k):
             rate=get_rate(multiindex,pstoi,k,reaction)
+            # print(multiindex, multiindex2, k, rate)
             j=get_index(multiindex2)
             data.append(rate)
             rows.append(i)
