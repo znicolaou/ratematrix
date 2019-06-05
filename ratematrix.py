@@ -88,7 +88,7 @@ def calculate_sparse_elements(rind):
             quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
             k=gas.forward_rate_constants[rind]
         multiindex2=multiindex-rstoi+pstoi
-        if np.all(multiindex2>=0.) and not np.isnan(k):
+        if np.all(multiindex2>=0.) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
             rate=get_rate(multiindex,rstoi,k,reaction)
             # print(multiindex, multiindex2, k, rate)
             j=get_index(multiindex2)
@@ -114,7 +114,7 @@ def calculate_sparse_elements(rind):
             quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
             k=gas.reverse_rate_constants[rind]
         multiindex2=multiindex+rstoi-pstoi
-        if np.all(multiindex2>=0) and not np.isnan(k):
+        if np.all(multiindex2>=0) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
             rate=get_rate(multiindex,pstoi,k,reaction)
             # print(multiindex, multiindex2, k, rate)
             j=get_index(multiindex2)
@@ -164,9 +164,32 @@ if args.accumulate==0:
     multiindices,count,level=rlist.list(atoms-remove_atoms.astype(int), sp_atoms, fixed[::2].astype(int))
     for i in range(0,len(fixed),2):
         multiindices[:,fixed[i]]=fixed[i+1]
+
+    accessible=[]
+    inaccessible=[]
+    gas=ct.Solution(mechanism)
+    gas.TPX=args.temperature,args.pressure*ct.one_atm,args.reference
+    refquant=ct.Quantity(gas,moles=np.sum(args.reference)/ct.avogadro)
+    refenth=refquant.enthalpy
+    refmass=refquant.mass
+    refvol=refquant.volume
+    quant=ct.Quantity(gas, moles=np.sum(args.reference)/ct.avogadro)
+    if(args.adiabatic == 1):
+        for multiindex in multiindices:
+            try:
+                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+                accessible.append(multiindex)
+            except:
+                inaccessible.append(multiindex)
+    else:
+        accessible=multiindices
+    multiindices=np.array(accessible)
+
     dim=len(multiindices)
     atot=np.sum(atoms)
     runtime=timeit.default_timer()-start
+
 
     np.save(filebase+"multiindices.npy",multiindices)
     out=open(filebase+"out.dat","w")
@@ -202,7 +225,6 @@ if args.calculate==1:
     refmass=refquant.mass
     refvol=refquant.volume
     quant=ct.Quantity(gas, moles=np.sum(args.reference)/ct.avogadro)
-
 
     data=[]
     rows=[]
