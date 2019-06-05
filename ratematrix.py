@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import os
-os.environ["OMP_NUM_THREADS"]="1"
+# os.environ["OMP_NUM_THREADS"]="1"
 import matplotlib
 matplotlib.use("TKAgg")
 import matplotlib.pyplot as plt
@@ -76,7 +76,9 @@ def calculate_sparse_elements(rind):
         if(args.adiabatic == 1):
             #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
             try:
-                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                # gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                gas.UVX=refenergy/refmass,refvol,multiindex
+
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
                 k=gas.forward_rate_constants[rind]
             except:
@@ -102,7 +104,8 @@ def calculate_sparse_elements(rind):
         if(args.adiabatic == 1):
             #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
             try:
-                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                # gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                gas.UVX=refenergy/refmass,refvol,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
                 k=gas.reverse_rate_constants[rind]
             except:
@@ -166,32 +169,39 @@ if args.accumulate==0:
         multiindices[:,fixed[i]]=fixed[i+1]
 
     accessible=[]
+    temps=[]
     inaccessible=[]
     gas=ct.Solution(mechanism)
     gas.TPX=args.temperature,args.pressure*ct.one_atm,args.reference
     refquant=ct.Quantity(gas,moles=np.sum(args.reference)/ct.avogadro)
     refenth=refquant.enthalpy
+    refenergy=refquant.int_energy
     refmass=refquant.mass
     refvol=refquant.volume
     quant=ct.Quantity(gas, moles=np.sum(args.reference)/ct.avogadro)
     if(args.adiabatic == 1):
         for multiindex in multiindices:
             try:
-                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                # gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                gas.UVX=refenergy/refmass,refvol,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+                temps.append(quant.T)
                 accessible.append(multiindex)
             except:
                 inaccessible.append(multiindex)
     else:
         accessible=multiindices
-    multiindices=np.array(accessible)
+        temps=np.zeros(len(multiindices))+args.temperature
 
+    multiindices=np.array(accessible)
     dim=len(multiindices)
+
     atot=np.sum(atoms)
     runtime=timeit.default_timer()-start
 
 
     np.save(filebase+"multiindices.npy",multiindices)
+    np.save(filebase+"temperatures.npy",temps)
     out=open(filebase+"out.dat","w")
     print(atot, dim, runtime, count, level, *elements)
     print(atot, dim, runtime, count, level, *elements, file=out)
