@@ -112,7 +112,8 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     recursive_list(current, avail, previously_enumerated, list, count, maxlevel, 0);
 
     //Populate the numpy output arrays with the information to return to Python
-    long int* data = new long int[list.size()*ns];
+    // long int* data = new long int[list.size()*ns];
+    long int* data = (long int*)malloc(list.size()*ns*sizeof(long int));
     int i=0;
     for (auto itr = list.begin(); itr != list.end(); ++itr) {
       for(int j=0; j<ns; j++){
@@ -125,7 +126,7 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     retdims[1]=ns;
     PyObject *ret0 = PyArray_SimpleNewFromData (2,retdims,NPY_LONG,data);
     PyObject *ret=Py_BuildValue("(Oii)",ret0,count,maxlevel);
-    Py_INCREF(ret0);
+    // Py_INCREF(ret0);
     Py_INCREF(ret);
     return ret;
 }

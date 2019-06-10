@@ -1,13 +1,13 @@
 #!/bin/bash
-N_temp=25
-N_press=25
-press0=0.5
-press1=15
-temp0=1000
-temp1=2500
-atoms="12 24 5"
+N_temp=10
+N_press=10
+press0=0.1
+press1=2
+temp0=600
+temp1=1000
+atoms="6 12 5"
 filebase0=data/sweep
-save=0
+# save=0
 export OMP_NUM_THREADS=1
 
 rm -r ${filebase0}*
@@ -23,8 +23,10 @@ for i in `seq 0 $N_temp`; do
     cp ${filebase0}multiindices.npy ${filebase}multiindices.npy
     cp ${filebase0}out.dat ${filebase}out.dat
     ./ratematrix.py --temperature $temp --pressure $press --atoms $atoms --filebase ${filebase} --accumulate 1 --plot 0 --save 1 --calculate 1 --fix 8 5 &
+    sleep 1
   done
   wait
+  sleep 10
 done
 
 rm ${filebase0}out.dat
@@ -32,8 +34,9 @@ rm ${filebase0}out.dat
 for i in `seq 0 $N_temp`; do
   for j in `seq 0 $N_press`; do
     filebase=$filebase0/${i}_${j}
-    # rm ${filebase}multiindices.npy
+    rm ${filebase}multiindices.npy
     tail -n 1 ${filebase}out.dat >> ${filebase0}out.dat
-    #rm ${filebase}out.dat
+    rm ${filebase}out.dat
   done
 done
+rm -r $filebase0

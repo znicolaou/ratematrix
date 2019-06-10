@@ -76,8 +76,8 @@ def calculate_sparse_elements(rind):
         if(args.adiabatic == 1):
             #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
             try:
-                # gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
-                gas.UVX=refenergy/refmass,refvol,multiindex
+                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                # gas.UVX=refenergy/refmass,refvol,multiindex
 
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
                 k=gas.forward_rate_constants[rind]
@@ -104,8 +104,8 @@ def calculate_sparse_elements(rind):
         if(args.adiabatic == 1):
             #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
             try:
-                # gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
-                gas.UVX=refenergy/refmass,refvol,multiindex
+                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
+                # gas.UVX=refenergy/refmass,refvol,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
                 k=gas.reverse_rate_constants[rind]
             except:
