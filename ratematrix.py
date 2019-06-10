@@ -39,6 +39,7 @@ def get_index(multiindex):
 
 #Function to get the transition rate given concentrations and rate constant
 def get_rate (multiindex, rstoi, k, reaction, vol):
+    # print(gas.T, np.sum(multiindices)*gas.T/(ct.avogadro*vol))
     if reaction.reaction_type == 1: #bimolecular
         if np.all(multiindex>=rstoi):
             # return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))
