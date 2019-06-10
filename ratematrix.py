@@ -38,11 +38,11 @@ def get_index(multiindex):
     return np.where(np.all(multiindices==multiindex,axis=1))[0][0]
 
 #Function to get the transition rate given concentrations and rate constant
-def get_rate (multiindex, rstoi, k, reaction):
+def get_rate (multiindex, rstoi, k, reaction, vol):
     if reaction.reaction_type == 1: #bimolecular
         if np.all(multiindex>=rstoi):
             # return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))
-            return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*quant.volume)
+            return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*vol)
         else:
             return 0.
     else: #three body reactions
@@ -54,7 +54,7 @@ def get_rate (multiindex, rstoi, k, reaction):
                 if species[third_body] in reaction.efficiencies.keys():
                     efficiency=reaction.efficiencies[species[third_body]]
                 # ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))**2
-                ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*quant.volume)**2
+                ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*vol)**2
             rstoi[third_body]-=1
         return ret
 #Main loop over rows to enumerate sparse data
@@ -89,9 +89,10 @@ def calculate_sparse_elements(rind):
             gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
             quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
             k=gas.forward_rate_constants[rind]
+
         multiindex2=multiindex-rstoi+pstoi
         if np.all(multiindex2>=0.) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
-            rate=get_rate(multiindex,rstoi,k,reaction)
+            rate=get_rate(multiindex,rstoi,k,reaction, quant.volume)
             # print(multiindex, multiindex2, k, rate)
             j=get_index(multiindex2)
             data.append(rate)
@@ -118,7 +119,7 @@ def calculate_sparse_elements(rind):
             k=gas.reverse_rate_constants[rind]
         multiindex2=multiindex+rstoi-pstoi
         if np.all(multiindex2>=0) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
-            rate=get_rate(multiindex,pstoi,k,reaction)
+            rate=get_rate(multiindex,pstoi,k,reaction, quant.volume)
             # print(multiindex, multiindex2, k, rate)
             j=get_index(multiindex2)
             data.append(rate)
