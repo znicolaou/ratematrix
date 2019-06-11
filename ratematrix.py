@@ -23,7 +23,7 @@ parser.add_argument("--plot", type=int, required=False, default=1, choices=[0,1]
 parser.add_argument("--save", type=int, required=False, default=1, choices=[0,1], help='Flag to save the results to filebaserate.npy, filebaseeigenvalues.npy, and filebaseeigenvectors.npy. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
 parser.add_argument("--adiabatic", type=int, required=False, default=0, help='Convert energy from reactions to heat. The temperature will specify the reference multiindix specified with --reference. ')
-parser.add_argument("--reference", type=int, nargs='+', required=False, default=[2, 0, 0, 1, 0, 0, 0, 0, 0], help='Reference multiindex at which the temperature is specified. Default 6  0  0  3  0  0  0  0  3.')
+parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 6, 3, 3, 8, 3], help='Reference multiindex at which the temperature is specified. Default 0, 6, 3, 3, 8, 3.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
 parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file. If number of values is not number of atoms, print the atoms. Default 3 3 3.')
 parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
@@ -71,8 +71,6 @@ def calculate_sparse_elements(rind):
         stop=timeit.default_timer()
         multiindex=get_multiindex(i)
         # gas.X=multiindex
-
-
         #forward reaction
         if(args.adiabatic == 1):
             #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
@@ -174,13 +172,16 @@ if args.accumulate==0:
     temps=[]
     inaccessible=[]
     gas=ct.Solution(mechanism)
-    gas.TPX=args.temperature,args.pressure*ct.one_atm,args.reference
-    refquant=ct.Quantity(gas,moles=np.sum(args.reference)/ct.avogadro)
+    refmultiindex=np.zeros(ns)
+    for i in range(0,len(args.reference),2):
+        refmultiindex[args.reference[i]]=args.reference[i+1]
+    gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
+    refquant=ct.Quantity(gas,moles=np.sum(refmultiindex)/ct.avogadro)
     refenth=refquant.enthalpy
     refenergy=refquant.int_energy
     refmass=refquant.mass
     refvol=refquant.volume
-    quant=ct.Quantity(gas, moles=np.sum(args.reference)/ct.avogadro)
+    quant=ct.Quantity(gas, moles=np.sum(refmultiindex)/ct.avogadro)
     if(args.adiabatic == 1):
         for multiindex in multiindices:
             try:
@@ -231,21 +232,25 @@ else:
 if args.calculate==1:
     #Loop through each reaction index and calculate spase elements
     gas=ct.Solution(mechanism)
-    gas.TPX=args.temperature,args.pressure*ct.one_atm,args.reference
-    refquant=ct.Quantity(gas,moles=np.sum(args.reference)/ct.avogadro)
+    gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
+    refquant=ct.Quantity(gas,moles=np.sum(refmultiindex)/ct.avogadro)
     refenth=refquant.enthalpy
     refmass=refquant.mass
     refvol=refquant.volume
-    quant=ct.Quantity(gas, moles=np.sum(args.reference)/ct.avogadro)
+    quant=ct.Quantity(gas, moles=np.sum(refmultiindex)/ct.avogadro)
 
     data=[]
     rows=[]
     columns=[]
+    sys.stdout.flush()
     for rind in range(nr):
+        print(rind/nr,end="\r")
+        sys.stdout.flush()
         reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind)
         data+=reac_data
         rows+=reac_rows
         columns+=reac_columns
+    sys.stdout.flush()
     nonzero=np.array([rows,columns])
     ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(dim),int(dim)))
     #The dimension is not that big - don't use spase matrix algorithms for eigenvalues

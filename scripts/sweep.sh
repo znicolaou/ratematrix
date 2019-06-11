@@ -1,4 +1,4 @@
-#!/bin/bash
+ #!/bin/bash
 N_temp=10
 N_press=10
 press0=0.01
