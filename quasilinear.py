@@ -6,63 +6,120 @@ import timeit
 import os
 import argparse
 from scipy.sparse import coo_matrix
+from scipy.linalg import eig
 
-def runsim_nosense ( tmax, temp, pres, phi, dilute ):
+
+def runsim_nosense ( tmax, temp, pres, ics ):
     dt = tmax/Npoints
-    gas.X = ('CH4:%f, O2:1, N2:4, Ar:%f'%(phi, dilute))
-    gas.TP = temp, pres
+
+    gas.TPX=temp,pres*ct.one_atm,ics
+    print(gas())
+
+
     r = ct.IdealGasReactor(gas, name='R1')
     sim = ct.ReactorNet([r])
 
-    sim.rtol = 1.0e-8
+    sim.rtol = 1.0e-6
     sim.atol = 1.0e-14
 
-    states = ct.SolutionArray(gas, extra=['t', 'A'])
+    states = ct.SolutionArray(gas, extra=['t', 'A', 'evals', 'evecs', 'frates', 'rrates'])
     for i in range(0, int(Npoints)):
         t=i*dt
         sim.advance(t)
-        print("%5f"%(t/tmax), end="\r")
-        mat=np.zeros((gas.n_species,gas.n_species))
-
-    #We would go faster to do this in the sparse matrix fashion - only loop over the reactions.
-    data=[]
-    rows=[]
-    columns=[]
-    for n in range(gas.n_species):
-        for rind in range(gas.n_reactions):
-            reaction=gas.reactions()[rind]
-            if species[n] in reaction.reactants.keys():
+        print("%5f"%(t/tmax), end="\n\n")
+        data=[]
+        rows=[]
+        columns=[]
+        for n in range(gas.n_species):
+            for rind in range(gas.n_reactions):
+                reaction=gas.reactions()[rind]
                 rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
-                num=len(np.where(rstoi>0)[0])
-                for m in np.where(rstoi>0)[0]:
-                    rstoi[m]-=1
-                    #forward reaction
-                    data.append(-1.0/num*gas.forward_rate_constants[rind]*np.product(gas.X**(rstoi)))
-                    rows.append(n)
-                    columns.append(m)
-                    #reverse reaction
-                    data.append(1.0/num*gas.reverse_rate_constants[rind]*np.product(gas.X**(rstoi)))
-                    rows.append(m)
-                    columns.append(n)
-                    rstoi[m]+=1
+                pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species])
+                if reaction.reaction_type == 1: #bimolecular
+                    if species[n] in reaction.reactants.keys():
+                        #forward reaction with species[n] a reactant
+                        for m in np.where(rstoi>0)[0]:
+                            order=rstoi[m]
+                            rstoi[m]-=1 #remaining reactants after removing species[m]
+                            data.append(-order*0.5*gas.forward_rate_constants[rind]*np.product(gas.X**(rstoi)))
+                            rows.append(n)
+                            columns.append(m)
+                            rstoi[m]+=1
+                        #reverse reaction with species[n] a product
+                        for m in np.where(pstoi>0)[0]:
+                            order=pstoi[m]
+                            pstoi[m]-=1  #remaining reactants after removing species[m]
+                            data.append(order*0.5*gas.reverse_rate_constants[rind]*np.product(gas.X**(pstoi)))
+                            rows.append(n)
+                            columns.append(m)
+                            pstoi[m]+=1
+                    if species[n] in reaction.products.keys():
+                        #forward reaction with species[n] a product
+                        for m in np.where(rstoi>0)[0]:
+                            order=rstoi[m]
+                            rstoi[m]-=1 #remaining reactants after removing species[m]
+                            data.append(order*0.5*gas.forward_rate_constants[rind]*np.product(gas.X**(rstoi)))
+                            rows.append(n)
+                            columns.append(m)
+                            rstoi[m]+=1
+                        #reverse reaction with species[n] a reactant
+                        for m in np.where(pstoi>0)[0]:
+                            order=pstoi[m]
+                            pstoi[m]-=1 #remaining reactants after removing species[m]
+                            data.append(-order*0.5*gas.reverse_rate_constants[rind]*np.product(gas.X**(pstoi)))
+                            rows.append(n)
+                            columns.append(m)
+                            pstoi[m]+=1
+                else: #three body reaction
+                # We need to do this third body loop in each part below.
+                # for third_body in range(ns):
+                #     rstoi[third_body]+=1
+                #     if np.all(multiindex>=rstoi):
+                #         efficiency=reaction.default_efficiency
+                #         if species[third_body] in reaction.efficiencies.keys():
+                #             efficiency=reaction.efficiencies[species[third_body]]
+                #         # ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))**2
+                #         ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*vol)**2
+                #     rstoi[third_body]-=1
+                    if species[n] in reaction.reactants.keys():
+                        #forward reaction with species[n] a reactant
+                        for m in np.where(rstoi>0)[0]:
+                            order=rstoi[m]
+                            rstoi[m]-=1 #remaining reactants after removing species[m]
+                            data.append(-order*0.5*gas.forward_rate_constants[rind]*np.product(gas.X**(rstoi)))
+                            rows.append(n)
+                            columns.append(m)
+                            rstoi[m]+=1
+                        #reverse reaction with species[n] a product
+                        for m in np.where(pstoi>0)[0]:
+                            order=pstoi[m]
+                            pstoi[m]-=1  #remaining reactants after removing species[m]
+                            data.append(order*0.5*gas.reverse_rate_constants[rind]*np.product(gas.X**(pstoi)))
+                            rows.append(n)
+                            columns.append(m)
+                            pstoi[m]+=1
+                    if species[n] in reaction.products.keys():
+                        #forward reaction with species[n] a product
+                        for m in np.where(rstoi>0)[0]:
+                            order=rstoi[m]
+                            rstoi[m]-=1 #remaining reactants after removing species[m]
+                            data.append(order*0.5*gas.forward_rate_constants[rind]*np.product(gas.X**(rstoi)))
+                            rows.append(n)
+                            columns.append(m)
+                            rstoi[m]+=1
+                        #reverse reaction with species[n] a reactant
+                        for m in np.where(pstoi>0)[0]:
+                            order=pstoi[m]
+                            pstoi[m]-=1 #remaining reactants after removing species[m]
+                            data.append(-order*0.5*gas.reverse_rate_constants[rind]*np.product(gas.X**(pstoi)))
+                            rows.append(n)
+                            columns.append(m)
+                            pstoi[m]+=1
+        quit()
 
-            if species[n] in reaction.products.keys():
-                rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
-                num=len(np.where(rstoi>0)[0])
-                for m in np.where(rstoi>0)[0]:
-                    rstoi[m]-=1
-                    #forward reaction
-                    data.append(1.0/num*gas.forward_rate_constants[rind]*np.product(gas.X**(rstoi)))
-                    rows.append(n)
-                    columns.append(m)
-                    #reverse reaction
-                    data.append(-1.0/num*gas.reverse_rate_constants[rind]*np.product(gas.X**(rstoi)))
-                    rows.append(m)
-                    columns.append(n)
-                    rstoi[m]+=1
-
-            mat =coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(gas.n_species),int(gas.n_species)))
-            states.append(r.thermo.state, t=t, A=mat.toarray())
+        mat =coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(gas.n_species),int(gas.n_species))).toarray()
+        eigenvalues,eigenvectors=eig(mat)
+        states.append(r.thermo.state, t=t, A=mat, evals=eigenvalues, evecs=eigenvectors, frates=gas.forward_rate_constants, rrates=gas.reverse_rate_constants)
 
     return states
 
@@ -74,8 +131,7 @@ parser.add_argument("--Npoints", type=float, required=False, default=1e2, dest='
 parser.add_argument("--tmax", type=float, required=False, default=1e-3, dest='tmax')
 parser.add_argument("--temperature", type=float, required=False, default=1500, dest='temperature')
 parser.add_argument("--pressure", type=float, required=False, default=1, dest='pressure')
-parser.add_argument("--dilute", type=float, required=False, default=0.1, dest='dilute')
-parser.add_argument("--phi", type=float, required=False, default=2.0, dest='phi')
+parser.add_argument("--ics", type=float, nargs='+', required=False, default=[13, 1, 3, 2, 47, 8], help='Initial mole fractions. Default 13 1 3 2 47 8 stoichiometric methane in air.')
 
 args = parser.parse_args()
 
@@ -86,29 +142,35 @@ Npoints = args.Npoints
 filebase = args.filebase
 temp = args.temperature
 pres = args.pressure
-phi = args.phi
-dilute=args.dilute
+ics = args.ics
 tmax=args.tmax
+ns=gas.n_total_species
+nr=gas.n_reactions
+
+multiindex=np.zeros(ns)
+for i in range(0,len(args.ics),2):
+    multiindex[int(args.ics[i])]=args.ics[i+1]
 
 species=species=gas.species_names
 reactions = gas.reactions()
 
-observation=runsim_nosense(tmax, temp, pres, phi, dilute)
+observation=runsim_nosense(tmax, temp, pres, multiindex)
 
-f=open('%s.dat'%(filebase),'w')
-print('species', *species, sep=' ', file=f)
-print('t', *(observation.t), sep=' ', file=f)
-print('T', *(observation.T), sep=' ', file=f)
-print('P', *(observation.P), sep=' ', file=f)
-
-rates=np.transpose(observation.net_rates_of_progress)
-for j in range(0, gas.n_reactions):
-    print('%s->%s'%(str(reactions[j].reactants).replace(" ","").replace("\"","").replace("'",""),str(reactions[j].products).replace(" ","").replace("\"","").replace("'","")), *(rates[j]), sep=' ', file=f)
-
-for j in range(0, gas.n_total_species):
-    print('[%s]'%(gas.species_names[j]), *([item for sublist in observation(gas.species_names[j]).X for item in sublist]), sep=' ', file=f) #flatten that list
-
+f=open('%sout.dat'%(filebase),'w')
+print(Npoints, ns, nr, temp, pres, tmax, file=f)
+print(*species, file=f)
+print(*(observation.t), file=f)
+print(*(observation.T), file=f)
+print(*(observation.P), file=f)
+for j in range(0, ns):
+    print(*([item for sublist in observation(gas.species_names[j]).X for item in sublist]), sep=' ', file=f)
 f.close()
+
+np.save(filebase+"matrices.npy",observation.A)
+np.save(filebase+"eigenvalues.npy",observation.evals)
+np.save(filebase+"eigenvectors.npy",observation.evecs)
+np.save(filebase+"frates.npy",observation.frates)
+np.save(filebase+"rrates.npy",observation.rrates)
 
 stop=timeit.default_timer()
 print ('runtime: %f'%(stop-start))
