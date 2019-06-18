@@ -219,8 +219,8 @@ else:
         temperatures=np.array(temperatures)
         pressures=np.array(pressures)
         np.save(filebase+"multiindices.npy",multiindices)
-        np.save(filebase+"temperatures.npy",multiindices)
-        np.save(filebase+"pressures.npy",multiindices)
+        np.save(filebase+"temperatures.npy",temperatures)
+        np.save(filebase+"pressures.npy",pressures)
 
     file=open(filebase+"out.dat","r")
     instrings=file.readline().split()
@@ -229,7 +229,8 @@ else:
     runtime=float(instrings[2])
     count=int(instrings[3])
     level=int(instrings[4])
-    refmultiindex=np.array([int(i) for i in file.readline()])
+    instrings=file.readline().split()
+    refmultiindex=np.array([int(float(i)) for i in instrings])
 
 if args.calculate==1:
     #Loop through each reaction index and calculate spase elements
