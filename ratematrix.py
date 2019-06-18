@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 import os
-# os.environ["OMP_NUM_THREADS"]="1"
+os.environ["OMP_NUM_THREADS"]="1"
 import matplotlib
 matplotlib.use("TKAgg")
 import matplotlib.pyplot as plt
@@ -23,9 +23,9 @@ parser.add_argument("--plot", type=int, required=False, default=1, choices=[0,1]
 parser.add_argument("--save", type=int, required=False, default=1, choices=[0,1], help='Flag to save the results to filebaserate.npy, filebaseeigenvalues.npy, and filebaseeigenvectors.npy. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
 parser.add_argument("--adiabatic", type=int, required=False, default=0, help='Convert energy from reactions to heat. The temperature will specify the reference multiindix specified with --reference. ')
-parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 6, 3, 3, 8, 3], help='Reference multiindex at which the temperature is specified. Default 0, 6, 3, 3, 8, 3.')
+parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 6, 3, 3, 8, 3], help='Reference multiindex at which the temperature is specified. Default 0 6 3 3 8 3.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
-parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[3, 3, 3], help='Number of each atom, in order of their appearance in the .cti file. If number of values is not number of atoms, print the atoms. Default 3 3 3.')
+parser.add_argument("--atoms", nargs='+', type=int, required=False, default=[6, 12, 3], help='Number of each atom, in order of their appearance in the .cti file. If number of values is not number of atoms, print the atoms. Default 6 12 3.')
 parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
 parser.add_argument("--accumulate", type=int, required=False, default=0, choices=[0,1], help='Flag to accumulate the multiindices from parallel runs.')
 
@@ -38,26 +38,11 @@ def get_index(multiindex):
     return np.where(np.all(multiindices==multiindex,axis=1))[0][0]
 
 #Function to get the transition rate given concentrations and rate constant
-def get_rate (multiindex, rstoi, k, reaction, vol):
-    # print(gas.T, np.sum(multiindices)*gas.T/(ct.avogadro*vol))
-    if reaction.reaction_type == 1: #bimolecular
-        if np.all(multiindex>=rstoi):
-            # return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))
-            return k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*vol)
-        else:
-            return 0.
-    else: #three body reactions
-        ret=0
-        for third_body in range(ns):
-            rstoi[third_body]+=1
-            if np.all(multiindex>=rstoi):
-                efficiency=reaction.default_efficiency
-                if species[third_body] in reaction.efficiencies.keys():
-                    efficiency=reaction.efficiencies[species[third_body]]
-                # ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(gas.volume_mole*np.sum(multiindex))**2
-                ret+=efficiency*k*np.product(factorial(multiindex)/factorial(multiindex-rstoi))/(ct.avogadro*vol)**2
-            rstoi[third_body]-=1
-        return ret
+def get_rate (multiindex, stoi, k, vol):
+    if np.all(multiindex>=stoi):
+        return k*np.product(factorial(multiindex)/factorial(multiindex-stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
+    else:
+        return 0.
 #Main loop over rows to enumerate sparse data
 def calculate_sparse_elements(rind):
     data=[]
@@ -70,14 +55,11 @@ def calculate_sparse_elements(rind):
     for  i in range(len(multiindices)):
         stop=timeit.default_timer()
         multiindex=get_multiindex(i)
-        # gas.X=multiindex
         #forward reaction
         if(args.adiabatic == 1):
-            #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
+            #Fix the energy to the reference state and volume. If there is not enough kinetic energy to reach the state, set the rate constant to zero
             try:
-                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
-                # gas.UVX=refenergy/refmass,refvol,multiindex
-
+                gas.UVX=refenergy/refmass,refvol/refmass,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
                 k=gas.forward_rate_constants[rind]
             except:
@@ -91,8 +73,7 @@ def calculate_sparse_elements(rind):
 
         multiindex2=multiindex-rstoi+pstoi
         if np.all(multiindex2>=0.) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
-            rate=get_rate(multiindex,rstoi,k,reaction, quant.volume)
-            # print(multiindex, multiindex2, k, rate)
+            rate=get_rate(multiindex,rstoi,k,refvol)
             j=get_index(multiindex2)
             data.append(rate)
             rows.append(i)
@@ -102,10 +83,9 @@ def calculate_sparse_elements(rind):
             columns.append(i)
         #reverse reaction
         if(args.adiabatic == 1):
-            #Fix the enthalpy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
+            #Fix the energy to the reference state. If there is not enough kinetic energy to reach the state, set the rate constant to zero
             try:
-                gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
-                # gas.UVX=refenergy/refmass,refvol,multiindex
+                gas.UVX=refenergy/refmass,refvol/refmass,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
                 k=gas.reverse_rate_constants[rind]
             except:
@@ -118,8 +98,7 @@ def calculate_sparse_elements(rind):
             k=gas.reverse_rate_constants[rind]
         multiindex2=multiindex+rstoi-pstoi
         if np.all(multiindex2>=0) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
-            rate=get_rate(multiindex,pstoi,k,reaction, quant.volume)
-            # print(multiindex, multiindex2, k, rate)
+            rate=get_rate(multiindex,pstoi,k,refvol)
             j=get_index(multiindex2)
             data.append(rate)
             rows.append(i)
@@ -147,7 +126,6 @@ start=timeit.default_timer()
 
 sp_atoms=[]
 for i in range(ns):
-    # multiindex.append(0)
     sp_atoms.append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
 sp_atoms=np.array(sp_atoms)
 
@@ -169,7 +147,8 @@ if args.accumulate==0:
         multiindices[:,fixed[i]]=fixed[i+1]
 
     accessible=[]
-    temps=[]
+    temperatures=[]
+    pressures=[]
     inaccessible=[]
     gas=ct.Solution(mechanism)
     refmultiindex=np.zeros(ns)
@@ -181,20 +160,23 @@ if args.accumulate==0:
     refenergy=refquant.int_energy
     refmass=refquant.mass
     refvol=refquant.volume
-    quant=ct.Quantity(gas, moles=np.sum(refmultiindex)/ct.avogadro)
     if(args.adiabatic == 1):
         for multiindex in multiindices:
             try:
-                # gas.HPX=refenth/refmass,args.pressure*ct.one_atm,multiindex
-                gas.UVX=refenergy/refmass,refvol,multiindex
+                gas.UVX=refenergy/refmass,refvol/refmass,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-                temps.append(quant.T)
-                accessible.append(multiindex)
+                if(quant.T > 100): #far outside the range where these constants are valid...
+                    temperatures.append(quant.T)
+                    pressures.append(quant.P/ct.one_atm)
+                    accessible.append(multiindex)
+                else:
+                    inaccessible.append(multiindex)
             except:
                 inaccessible.append(multiindex)
     else:
         accessible=multiindices
-        temps=np.zeros(len(multiindices))+args.temperature
+        temperatures=np.zeros(len(multiindices))+args.temperature
+        pressures=np.zeros(len(multiindices))+args.pressure
 
     multiindices=np.array(accessible)
     dim=len(multiindices)
@@ -204,7 +186,8 @@ if args.accumulate==0:
 
 
     np.save(filebase+"multiindices.npy",multiindices)
-    np.save(filebase+"temperatures.npy",temps)
+    np.save(filebase+"temperatures.npy",temperatures)
+    np.save(filebase+"pressures.npy",pressures)
     out=open(filebase+"out.dat","w")
     print(atot, dim, runtime, count, level, *elements)
     print(atot, dim, runtime, count, level, *elements, file=out)
