@@ -13,6 +13,7 @@ from scipy.linalg import eig
 from scipy.special import factorial
 import sys
 import rlist
+import glob
 
 #Command-line arguments
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
@@ -189,20 +190,37 @@ if args.accumulate==0:
     np.save(filebase+"temperatures.npy",temperatures)
     np.save(filebase+"pressures.npy",pressures)
     out=open(filebase+"out.dat","w")
-    print(atot, dim, runtime, count, level, *elements)
-    print(atot, dim, runtime, count, level, *elements, file=out)
+    print(atot, dim, runtime, count, level)
+
+    print(atot, dim, runtime, count, level, file=out)
+    print(*refmultiindex, file=out)
+    print(*elements, file=out)
     out.close()
     sys.stdout.flush()
 else:
     if os.path.isfile(filebase+"multiindices.npy"):
         multiindices=np.load(filebase+"multiindices.npy")
     else:
-        mfiles=sorted(os.listdir(filebase))
+        # mfiles=sorted(os.listdir(filebase))
+        mfiles=sorted(glob.glob('%s/*multiindices.npy'%filebase))
+        tfiles=sorted(glob.glob('%s/*temperatures.npy'%filebase))
+        pfiles=sorted(glob.glob('%s/*pressures.npy'%filebase))
+
         multiindices=[]
+        temperatures=[]
+        pressures=[]
         for file in mfiles:
-            multiindices+=np.load(filebase+"/"+file).tolist()
+            multiindices+=np.load(file).tolist()
+        for file in tfiles:
+            temperatures+=np.load(file).tolist()
+        for file in pfiles:
+            pressures+=np.load(file).tolist()
         multiindices=np.array(multiindices)
+        temperatures=np.array(temperatures)
+        pressures=np.array(pressures)
         np.save(filebase+"multiindices.npy",multiindices)
+        np.save(filebase+"temperatures.npy",multiindices)
+        np.save(filebase+"pressures.npy",multiindices)
 
     file=open(filebase+"out.dat","r")
     instrings=file.readline().split()
@@ -211,6 +229,7 @@ else:
     runtime=float(instrings[2])
     count=int(instrings[3])
     level=int(instrings[4])
+    refmultiindex=np.array([int(i) for i in file.readline()])
 
 if args.calculate==1:
     #Loop through each reaction index and calculate spase elements
