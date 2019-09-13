@@ -152,9 +152,17 @@ if args.accumulate==0:
     pressures=[]
     inaccessible=[]
     gas=ct.Solution(mechanism)
-    refmultiindex=np.zeros(ns)
-    for i in range(0,len(args.reference),2):
-        refmultiindex[args.reference[i]]=args.reference[i+1]
+    if args.adiabatic==1:
+        refmultiindex=np.zeros(ns,dtype=int)
+        for i in range(0,len(args.reference),2):
+            refmultiindex[args.reference[i]]=args.reference[i+1]
+    elif len(multiindices)>0:
+        refmultiindex=multiindices[-1]
+    else:
+        refmultiindex=np.zeros(ns,dtype=int)
+        for i in range(0,len(args.reference),2):
+            refmultiindex[args.reference[i]]=int(args.reference[i+1])
+
     gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
     refquant=ct.Quantity(gas,moles=np.sum(refmultiindex)/ct.avogadro)
     refenth=refquant.enthalpy
@@ -235,6 +243,16 @@ else:
 if args.calculate==1:
     #Loop through each reaction index and calculate spase elements
     gas=ct.Solution(mechanism)
+    if args.adiabatic==1:
+        refmultiindex=np.zeros(ns,dtype=int)
+        for i in range(0,len(args.reference),2):
+            refmultiindex[args.reference[i]]=args.reference[i+1]
+    elif len(multiindices)>0:
+        refmultiindex=multiindices[-1]
+    else:
+        refmultiindex=np.zeros(ns,dtype=int)
+        for i in range(0,len(args.reference),2):
+            refmultiindex[args.reference[i]]=int(args.reference[i+1])
     gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
     refquant=ct.Quantity(gas,moles=np.sum(refmultiindex)/ct.avogadro)
     refenth=refquant.enthalpy
