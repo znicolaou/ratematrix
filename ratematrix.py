@@ -43,65 +43,60 @@ def get_rate (multiindex, stoi, k, vol):
         return k*np.product(factorial(multiindex)/factorial(multiindex-stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
     else:
         return 0.
+
+#We can parallelize this by calculating for each row, which should go relatively fast.
+def calculate_sparse_elements_row(rind,i):
+    reaction=gas.reactions()[rind]
+    rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
+    pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species])
+    data=[]
+    rows=[]
+    columns=[]
+    multiindex=get_multiindex(i)
+    if(args.adiabatic == 1):
+        gas.UVX=refenergy/refmass,refvol/refmass,multiindex
+
+    elif(args.adiabatic == 2):
+        gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
+    else:
+        gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
+
+    #forward reaction
+    k=gas.forward_rate_constants[rind]
+    multiindex2=multiindex-rstoi+pstoi
+    if np.all(multiindex2>=0.) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
+        rate=get_rate(multiindex,rstoi,k,refvol)
+        j=get_index(multiindex2)
+        data.append(rate)
+        rows.append(i)
+        columns.append(j)
+        data.append(-rate)
+        rows.append(i)
+        columns.append(i)
+    #reverse reaction
+    k=gas.reverse_rate_constants[rind]
+    multiindex2=multiindex+rstoi-pstoi
+    if np.all(multiindex2>=0) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
+        rate=get_rate(multiindex,pstoi,k,refvol)
+        j=get_index(multiindex2)
+        data.append(rate)
+        rows.append(i)
+        columns.append(j)
+        data.append(-rate)
+        rows.append(i)
+        columns.append(i)
+    return data,rows,columns
+
 #Main loop over rows to enumerate sparse data
 def calculate_sparse_elements(rind):
     data=[]
     rows=[]
     columns=[]
-    reaction=gas.reactions()[rind]
-    rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
-    pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species])
-    start2=timeit.default_timer()
     for  i in range(len(multiindices)):
-        stop=timeit.default_timer()
-        multiindex=get_multiindex(i)
-        #forward reaction
-        if(args.adiabatic == 1):
-            gas.UVX=refenergy/refmass,refvol/refmass,multiindex
-            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            k=gas.forward_rate_constants[rind]
-        elif(args.adiabatic == 2):
-            gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
-            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            k=gas.forward_rate_constants[rind]
-        else:
-            gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
-            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            k=gas.forward_rate_constants[rind]
-
-        multiindex2=multiindex-rstoi+pstoi
-        if np.all(multiindex2>=0.) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
-            rate=get_rate(multiindex,rstoi,k,refvol)
-            j=get_index(multiindex2)
-            data.append(rate)
-            rows.append(i)
-            columns.append(j)
-            data.append(-rate)
-            rows.append(i)
-            columns.append(i)
-        #reverse reaction
-        if(args.adiabatic == 1):
-            gas.UVX=refenergy/refmass,refvol/refmass,multiindex
-            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            k=gas.reverse_rate_constants[rind]
-        elif(args.adiabatic == 2):
-            gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
-            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            k=gas.forward_rate_constants[rind]
-        else:
-            gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
-            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            k=gas.reverse_rate_constants[rind]
-        multiindex2=multiindex+rstoi-pstoi
-        if np.all(multiindex2>=0) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
-            rate=get_rate(multiindex,pstoi,k,refvol)
-            j=get_index(multiindex2)
-            data.append(rate)
-            rows.append(i)
-            columns.append(j)
-            data.append(-rate)
-            rows.append(i)
-            columns.append(i)
+        rowdata, rowrows, rowcolumns = calculate_sparse_elements_row(rind,i)
+        data+=rowdata
+        rows+=rowrows
+        columns+=rowcolumns
     return data,rows,columns
 
 #Main
