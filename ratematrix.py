@@ -9,6 +9,7 @@ import cantera as ct
 import timeit
 import argparse
 from scipy.sparse import coo_matrix
+from scipy.sparse import save_npz
 from scipy.linalg import eig
 from scipy.special import factorial
 import sys
@@ -19,12 +20,13 @@ import glob
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
 parser.add_argument("--filebase", type=str, required=True, dest='filebase', help='Base string for npy file output. Three files will be created for each reaction, storing rates, row indices, and column indices.')
 parser.add_argument("--mechanism", type=str, required=False, default='mechanisms/h2o2.cti', dest='mechanism', help='Mechanism cti file. Default mechanisms/h2o2.cti.')
-parser.add_argument("--calculate", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate rate matrix and eigenvalues. If 1, calculate space, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. If 0, only calculate space, then print total atoms, dimension, runtime, recursive calls, and recursive levels, then quit. Default 1.')
+parser.add_argument("--calculate", nargs=2, type=int, required=False, default=[0,-1], help='Rows to calculate in rate matrix. Takes starting index and ending index and save rate matrix corresponding to all reactions over these rows. Default [1 -1].')
+parser.add_argument("--eigenvalues", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
 parser.add_argument("--plot", type=int, required=False, default=0, choices=[0,1], help='Flag to plot eigenvalues and save filebase/eigenvales.pdf. Default 1.')
 parser.add_argument("--save", type=int, required=False, default=1, choices=[0,1], help='Flag to save the results to filebaserate.npy, filebaseeigenvalues.npy, and filebaseeigenvectors.npy. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
 parser.add_argument("--adiabatic", type=int, choices=[0, 1, 2], required=False, default=0, help='Convert energy from reactions to heat. The values 0, 1, and 2 correspond to constant volume/temperature, constant volume/energy, and constant pressure/enthalpy, respectively. The temperature is specify the reference multiindix specified with --reference. ')
-parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 6, 3, 3, 8, 3], help='Reference multiindex for which the temperature and number of atoms are specified. Default 0 6 3 3 8 3.')
+parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 6, 3, 3, 8, 0], help='Reference multiindex for which the temperature and number of atoms are specified. Default 0 6 3 3 8 0.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
 parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
 parser.add_argument("--accumulate", type=int, required=False, default=0, choices=[0,1], help='Flag to accumulate the multiindices from parallel runs.')
@@ -55,7 +57,6 @@ def calculate_sparse_elements_row(rind,i):
     multiindex=get_multiindex(i)
     if(args.adiabatic == 1):
         gas.UVX=refenergy/refmass,refvol/refmass,multiindex
-
     elif(args.adiabatic == 2):
         gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
     else:
@@ -88,11 +89,11 @@ def calculate_sparse_elements_row(rind,i):
     return data,rows,columns
 
 #Main loop over rows to enumerate sparse data
-def calculate_sparse_elements(rind):
+def calculate_sparse_elements(rind, startrow, endrow):
     data=[]
     rows=[]
     columns=[]
-    for  i in range(len(multiindices)):
+    for  i in range(startrow,endrow):
         rowdata, rowrows, rowcolumns = calculate_sparse_elements_row(rind,i)
         data+=rowdata
         rows+=rowrows
@@ -121,8 +122,6 @@ for i in range(len(refmultiindex)):
 
 fixed=np.array(args.fix)
 start=timeit.default_timer()
-
-
 
 #Calculate the space of possible states
 if args.accumulate==0:
@@ -239,7 +238,10 @@ else:
     instrings=file.readline().split()
     refmultiindex=np.array([int(float(i)) for i in instrings])
 
-if args.calculate==1:
+startrow, endrow=args.calculate
+if endrow==-1 or endrow > dim:
+    endrow=dim
+if endrow>startrow:
     #Loop through each reaction index and calculate spase elements
     gas=ct.Solution(mechanism)
     gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
@@ -253,28 +255,34 @@ if args.calculate==1:
     rows=[]
     columns=[]
     sys.stdout.flush()
-    #note: this is currently the bottleneck, but can be parallelized over 1500 cores
     for rind in range(nr):
         print(rind/nr,end="\r")
         sys.stdout.flush()
-        reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind)
+        reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind, startrow, endrow)
         data+=reac_data
         rows+=reac_rows
         columns+=reac_columns
     sys.stdout.flush()
-    nonzero=np.array([rows,columns])
     ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(dim),int(dim)))
-    #The dimension is not that big - don't use spase matrix algorithms for eigenvalues
-    eigenvalues,eigenvectors=eig(np.transpose(ratematrix.toarray()))
-    sorted=np.argsort(eigenvalues)
     if args.save==1:
         np.save(filebase+"spatoms.npy",sp_atoms)
-        np.save(filebase+"ratematrix.npy",ratematrix.toarray())
+        if startrow==0 and endrow==dim:
+            np.save(filebase+"ratematrix.npy",ratematrix.toarray())
+        else:
+            save_npz(filebase+"ratematrix%i_%i.npz"%(startrow,endrow),ratematrix)
+    print(args.temperature, args.pressure, timeit.default_timer()-start)
+
+#Calculate eigenvalues
+if args.eigenvalues==1:
+    #The dimension is not that big - don't use spase matrix algorithms for eigenvalues
+    ratematrix=np.load(filebase+"ratematrix.npy")
+    eigenvalues,eigenvectors=eig(np.transpose(ratematrix))
+    sorted=np.argsort(eigenvalues)
+    if args.save==1:
         np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
         np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
 
     #Print dimension, runtime, sparsity, and three smallest eigenvalues
-    print(args.temperature, args.pressure, timeit.default_timer()-start)
     out=open(filebase+"out.dat","a+")
     print(args.temperature, args.pressure, timeit.default_timer()-start, *np.sort(np.real(eigenvalues)), file=out)
     out.close()

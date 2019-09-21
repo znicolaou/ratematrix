@@ -1,9 +1,9 @@
 #!/bin/bash
-threads=10
+threads=72
 
-for num in `seq 3 5`; do
+for num in `seq 3 25`; do
 
-filebase0=data/parallel$num
+filebase0=data/h2o2/$num
 
 mkdir -p $filebase0
 rm -r ${filebase0}*
@@ -40,7 +40,7 @@ tail -n 2 ${filebase0}pout.dat >> ${filebase0}out.dat
 rm ${filebase0}pout.dat
 
 ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num  --calculate 0 --accumulate 1
-#rm -r $filebase0
+rm -r $filebase0
 
-cat ${filebase0}out.dat >> data/runtimes4out.dat
+head -n 1 ${filebase0}out.dat >> data/runtimes4out.dat
 done
