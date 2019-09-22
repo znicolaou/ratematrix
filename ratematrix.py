@@ -1,16 +1,12 @@
 #!/usr/bin/env python
 import os
 os.environ["OMP_NUM_THREADS"]="1"
-import matplotlib
-matplotlib.use("TKAgg")
-import matplotlib.pyplot as plt
 import numpy as np
 import cantera as ct
 import timeit
 import argparse
-from scipy.sparse import coo_matrix
-from scipy.sparse import save_npz
-from scipy.linalg import eig
+from scipy.sparse import coo_matrix, save_npz, load_npz
+from scipy.sparse.linalg import eigs
 from scipy.special import factorial
 import sys
 import rlist
@@ -20,13 +16,11 @@ import glob
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
 parser.add_argument("--filebase", type=str, required=True, dest='filebase', help='Base string for npy file output. Three files will be created for each reaction, storing rates, row indices, and column indices.')
 parser.add_argument("--mechanism", type=str, required=False, default='mechanisms/h2o2.cti', dest='mechanism', help='Mechanism cti file. Default mechanisms/h2o2.cti.')
-parser.add_argument("--calculate", nargs=2, type=int, required=False, default=[0,-1], help='Rows to calculate in rate matrix. Takes starting index and ending index and save rate matrix corresponding to all reactions over these rows. Default [1 -1].')
-parser.add_argument("--eigenvalues", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
-parser.add_argument("--plot", type=int, required=False, default=0, choices=[0,1], help='Flag to plot eigenvalues and save filebase/eigenvales.pdf. Default 1.')
-parser.add_argument("--save", type=int, required=False, default=1, choices=[0,1], help='Flag to save the results to filebaserate.npy, filebaseeigenvalues.npy, and filebaseeigenvectors.npy. Default 1.')
+parser.add_argument("--calculate", nargs=2, type=int, required=False, default=[0,-1], help='Rows to calculate in rate matrix. Takes starting index and ending index and save rate matrix corresponding to all reactions over these rows. Default [0 -1].')
+parser.add_argument("--eigenvalues", type=int, required=False, default=50, help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
 parser.add_argument("--adiabatic", type=int, choices=[0, 1, 2], required=False, default=0, help='Convert energy from reactions to heat. The values 0, 1, and 2 correspond to constant volume/temperature, constant volume/energy, and constant pressure/enthalpy, respectively. The temperature is specify the reference multiindix specified with --reference. ')
-parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 6, 3, 3, 8, 0], help='Reference multiindex for which the temperature and number of atoms are specified. Default 0 6 3 3 8 0.')
+parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 4, 3, 2, 8, 0], help='Reference multiindex for which the temperature and number of atoms are specified. Default 0 4 3 2 8 0.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
 parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
 parser.add_argument("--accumulate", type=int, required=False, default=0, choices=[0,1], help='Flag to accumulate the multiindices from parallel runs.')
@@ -119,13 +113,22 @@ sp_atoms=np.array(sp_atoms)
 atoms=np.zeros(len(elements),dtype=int)
 for i in range(len(refmultiindex)):
     atoms += refmultiindex[i]*sp_atoms[i]
-
 fixed=np.array(args.fix)
-start=timeit.default_timer()
+
+atoms=np.array(atoms)
+gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
+refquant=ct.Quantity(gas,moles=np.sum(refmultiindex)/ct.avogadro)
+refenth=refquant.enthalpy
+refentr=refquant.entropy
+refenergy=refquant.int_energy
+refmass=refquant.mass
+refvol=refquant.volume
+refpotentials=refquant.chemical_potentials
 
 #Calculate the space of possible states
 if args.accumulate==0:
-    atoms=np.array(atoms)
+    start=timeit.default_timer()
+
     multiindex=[]
     last_avail=[[],[]]
     for i in range(ns):
@@ -146,14 +149,6 @@ if args.accumulate==0:
     inaccessible=[]
     gas=ct.Solution(mechanism)
 
-    gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
-    refquant=ct.Quantity(gas,moles=np.sum(refmultiindex)/ct.avogadro)
-    refenth=refquant.enthalpy
-    refentr=refquant.entropy
-    refenergy=refquant.int_energy
-    refmass=refquant.mass
-    refvol=refquant.volume
-    refpotentials=refquant.chemical_potentials
     if(args.adiabatic == 1):
         for multiindex in multiindices:
             try:
@@ -196,7 +191,7 @@ if args.accumulate==0:
     np.save(filebase+"temperatures.npy",temperatures)
     np.save(filebase+"pressures.npy",pressures)
     out=open(filebase+"out.dat","w")
-    print(atot, dim, runtime, count, level)
+    print("dimension ", dim, runtime)
 
     print(atot, dim, runtime, count, level, file=out)
     print(*refmultiindex, file=out)
@@ -207,7 +202,6 @@ else:
     if os.path.isfile(filebase+"multiindices.npy"):
         multiindices=np.load(filebase+"multiindices.npy")
     else:
-        # mfiles=sorted(os.listdir(filebase))
         mfiles=sorted(glob.glob('%s/*multiindices.npy'%filebase))
         tfiles=sorted(glob.glob('%s/*temperatures.npy'%filebase))
         pfiles=sorted(glob.glob('%s/*pressures.npy'%filebase))
@@ -243,6 +237,8 @@ if endrow==-1 or endrow > dim:
     endrow=dim
 if endrow>startrow:
     #Loop through each reaction index and calculate spase elements
+    start=timeit.default_timer()
+
     gas=ct.Solution(mechanism)
     gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
     refquant=ct.Quantity(gas,moles=np.sum(refmultiindex)/ct.avogadro)
@@ -256,43 +252,52 @@ if endrow>startrow:
     columns=[]
     sys.stdout.flush()
     for rind in range(nr):
-        print(rind/nr,end="\r")
         sys.stdout.flush()
         reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind, startrow, endrow)
         data+=reac_data
         rows+=reac_rows
         columns+=reac_columns
     sys.stdout.flush()
-    ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(dim),int(dim)))
-    if args.save==1:
-        np.save(filebase+"spatoms.npy",sp_atoms)
-        if startrow==0 and endrow==dim:
-            np.save(filebase+"ratematrix.npy",ratematrix.toarray())
-        else:
-            save_npz(filebase+"ratematrix%i_%i.npz"%(startrow,endrow),ratematrix)
-    print(args.temperature, args.pressure, timeit.default_timer()-start)
+    np.save(filebase+"spatoms.npy",sp_atoms)
+    if not os.path.exists(filebase+"rows"):
+        os.mkdir(filebase+"rows")
+    if not os.path.exists(filebase+"columns"):
+        os.mkdir(filebase+"columns")
+    if not os.path.exists(filebase+"data"):
+        os.mkdir(filebase+"data")
+    np.save(filebase+"rows/%i_%i.npy"%(startrow,endrow),rows)
+    np.save(filebase+"columns/%i_%i.npy"%(startrow,endrow),columns)
+    np.save(filebase+"data/%i_%i.npy"%(startrow,endrow),data)
+    runtime=timeit.default_timer()-start
+    print("sparsity ", len(rows)/(dim*dim), runtime)
 
 #Calculate eigenvalues
-if args.eigenvalues==1:
-    #The dimension is not that big - don't use spase matrix algorithms for eigenvalues
-    ratematrix=np.load(filebase+"ratematrix.npy")
-    eigenvalues,eigenvectors=eig(np.transpose(ratematrix))
+if args.eigenvalues>0:
+    #accumulate rows, data, and columns
+    start=timeit.default_timer()
+
+    files=glob.glob(args.filebase+"rows/*.npy")
+    rows=[]
+    for file in files:
+        row=np.load(file).tolist()
+        rows+=row
+    files=glob.glob(args.filebase+"columns/*.npy")
+    columns=[]
+    for file in files:
+        column=np.load(file).tolist()
+        columns+=column
+    files=glob.glob(args.filebase+"data/*.npy")
+    data=[]
+    for file in files:
+        dat=np.load(file).tolist()
+        data+=dat
+    ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(dim),int(dim)))
+
+    eigenvalues,eigenvectors=eigs(np.transpose(ratematrix), args.eigenvalues, sigma=1e-3, which='LM')
     sorted=np.argsort(eigenvalues)
-    if args.save==1:
-        np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
-        np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
+    np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
+    np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
 
-    #Print dimension, runtime, sparsity, and three smallest eigenvalues
-    out=open(filebase+"out.dat","a+")
-    print(args.temperature, args.pressure, timeit.default_timer()-start, *np.sort(np.real(eigenvalues)), file=out)
-    out.close()
+    runtime=timeit.default_timer()-start
+    print("eigenvalues ", runtime)
     sys.stdout.flush()
-
-    if args.plot==1:
-        fig=plt.figure()
-        fig.gca().set_ylabel(r'$\mathrm{Im}\left(\lambda\right)$')
-        fig.gca().set_xlabel(r'$\mathrm{Re}\left(\lambda\right)$')
-        plt.plot(np.real(eigenvalues),np.imag(eigenvalues), 'bx', markersize=3.0)
-        plt.tight_layout()
-        plt.show()
-        fig.savefig(filebase+"eigenvalues.pdf", bbox_inches='tight')
