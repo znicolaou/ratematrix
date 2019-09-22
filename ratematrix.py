@@ -125,6 +125,7 @@ refmass=refquant.mass
 refvol=refquant.volume
 refpotentials=refquant.chemical_potentials
 
+#TODO: add accumulate 2 to combine the rows, columns, data files to reduce excess
 #Calculate the space of possible states
 if args.accumulate==0:
     start=timeit.default_timer()
@@ -202,9 +203,9 @@ else:
     if os.path.isfile(filebase+"multiindices.npy"):
         multiindices=np.load(filebase+"multiindices.npy")
     else:
-        mfiles=sorted(glob.glob('%s/*multiindices.npy'%filebase))
-        tfiles=sorted(glob.glob('%s/*temperatures.npy'%filebase))
-        pfiles=sorted(glob.glob('%s/*pressures.npy'%filebase))
+        mfiles=sorted(glob.glob('%s*multiindices.npy'%filebase))
+        tfiles=sorted(glob.glob('%s*temperatures.npy'%filebase))
+        pfiles=sorted(glob.glob('%s*pressures.npy'%filebase))
 
         multiindices=[]
         temperatures=[]
@@ -276,24 +277,36 @@ if args.eigenvalues>0:
     #accumulate rows, data, and columns
     start=timeit.default_timer()
 
-    files=glob.glob(args.filebase+"rows/*.npy")
-    rows=[]
-    for file in files:
-        row=np.load(file).tolist()
-        rows+=row
-    files=glob.glob(args.filebase+"columns/*.npy")
-    columns=[]
-    for file in files:
-        column=np.load(file).tolist()
-        columns+=column
-    files=glob.glob(args.filebase+"data/*.npy")
-    data=[]
-    for file in files:
-        dat=np.load(file).tolist()
-        data+=dat
+    if os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
+        rows=np.load(args.filebase+"rows.npy")
+        columns=np.load(args.filebase+"columns.npy")
+        data=np.load(args.filebase+"data.npy")
+    else:
+        files=glob.glob(args.filebase+"rows/*.npy")
+        rows=[]
+        for file in files:
+            row=np.load(file).tolist()
+            rows+=row
+        files=glob.glob(args.filebase+"columns/*.npy")
+        columns=[]
+        for file in files:
+            column=np.load(file).tolist()
+            columns+=column
+        files=glob.glob(args.filebase+"data/*.npy")
+        data=[]
+        for file in files:
+            dat=np.load(file).tolist()
+            data+=dat
+        np.save(filebase+"rows.npy",rows)
+        np.save(filebase+"columns.npy",columns)
+        np.save(filebase+"data.npy",data)
+
     ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(dim),int(dim)))
 
-    eigenvalues,eigenvectors=eigs(np.transpose(ratematrix), args.eigenvalues, sigma=1e-3, which='LM')
+    if args.eigenvalues < ratematrix.shape[0]:
+        eigenvalues,eigenvectors=eigs(np.transpose(ratematrix), args.eigenvalues, sigma=1e-3, which='LM')
+    else:
+        eigenvalues,eigenvectors=np.eig(np.transpose(ratematrix))
     sorted=np.argsort(eigenvalues)
     np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
     np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
