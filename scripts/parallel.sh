@@ -70,7 +70,9 @@ rm ${filebase0}_*cout.dat
 runtime=`awk '{t+=$3}END{print(t)}' ${filebase0}cout.dat`
 echo "calculate runtime: $runtime"
 
-./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num --calculate 0 0 --accumulate 1 --eigenvalues $((10*num)) --adiabatic $adiabatic --temperature $temperature
+evals=`bc <<< "$dim/20"`
+
+./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature
 
 rm -r ${filebase0}rows
 rm -r ${filebase0}columns
