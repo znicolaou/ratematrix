@@ -268,7 +268,9 @@ if endrow>startrow:
     np.save(filebase+"columns/%i_%i.npy"%(startrow,endrow),columns)
     np.save(filebase+"data/%i_%i.npy"%(startrow,endrow),data)
     runtime=timeit.default_timer()-start
-    print("sparsity ", len(rows)/(dim*dim), runtime)
+    file=open(filebase+"_%icout.dat"%(start),"w")
+    print("sparsity ", len(rows)/(dim*dim), runtime, file=file)
+    close(file)
 
 #Calculate eigenvalues
 if args.eigenvalues>0:

@@ -4,11 +4,11 @@
 #SBATCH -p short
 #SBATCH -t 04:00:00
 #SBATCH --mem=7500
-#SBATCH --output=outs/flat_%a.out
+#SBATCH --output=parallel.out
 threads=100
-
-num=8
 mem=50
+
+for num in `seq 3 6`; do
 mkdir -p data/h2o2
 
 echo $num
@@ -64,8 +64,6 @@ echo "state space dimension: $dim"
 echo "state space cputime: $cputime"
 echo "state space runtime: $runtime"
 
-head -n 1 ${filebase0}out.dat >> data/runtimes4out.dat
-
 #Calculate matrix entries
 starttime=`date +%s%N`
 
@@ -77,7 +75,7 @@ while [ $js -ge $threads ]; do
   sleep 1
   js=`jobs | wc -l`
 done
-srun --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate $start $((start+100)) --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature >> ${filebase0}_${start}cout.dat &
+srun --exclusive -n1 -N1 --mem=$mem (./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate $start $((start+100)) --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature &
 done
 wait
 
@@ -92,9 +90,10 @@ echo "calculate runtime: $runtime"
 
 evals=`bc <<< "$dim/20"`
 
-runtime=`srun ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature`
-echo "eigenvalues runtime: $runtime"
+#runtime=`srun ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature`
+#echo "eigenvalues runtime: $runtime"
 
-rm -r ${filebase0}rows
-rm -r ${filebase0}columns
-rm -r ${filebase0}data
+#rm -r ${filebase0}rows
+#rm -r ${filebase0}columns
+#rm -r ${filebase0}data
+done
