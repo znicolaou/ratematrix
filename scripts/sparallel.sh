@@ -1,14 +1,14 @@
 #!/bin/bash
 #SBATCH -A p30575
-#SBATCH -n 100
+#SBATCH -n 400
 #SBATCH -p short
 #SBATCH -t 04:00:00
-#SBATCH --mem=7500
+#SBATCH --mem=100000
 #SBATCH --output=parallel.out
-threads=100
-mem=50
+threads=1000
+mem=150
 
-for num in `seq 3 6`; do
+for num in `seq 10 25`; do
 mkdir -p data/h2o2
 
 echo $num
@@ -27,7 +27,7 @@ for i in `seq 0 $((4*num))`; do
       sleep 0.01
       js=`jobs | wc -l`
     done
-    srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0}temp/${i}_${j} --reference 0 $((2*num)) 3 $num 4 1  --fix 1 $i 2 $j --calculate 0 0 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature  &
+    srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0}temp/${i}_${j} --reference 0 $((2*num)) 3 $num 4 1  --fix 1 $i 2 $j --calculate 0 0 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature  &> /dev/null &
   done
 done
 end=`date +%s`
@@ -50,7 +50,7 @@ tail -n 2 ${filebase0}pout.dat >> ${filebase0}temp/out.dat
 
 rm ${filebase0}pout.dat
 
-srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0}temp/ --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature
+srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0}temp/ --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature &> /dev/null
 
 mv ${filebase0}temp/out.dat $filebase0
 mv ${filebase0}temp/multiindices.npy $filebase0
@@ -75,7 +75,7 @@ while [ $js -ge $threads ]; do
   sleep 1
   js=`jobs | wc -l`
 done
-srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate $start $((start+100)) --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature &
+srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate $start $((start+100)) --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature &> /dev/null &
 done
 wait
 
@@ -91,10 +91,11 @@ echo "calculate runtime: $runtime"
 evals=`bc <<< "$dim/20"`
 
 sleep 5
-runtime=`srun -Q ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature`
+srun -N1 -n1 -Q ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature` &> /dev/null
+runtime=`awk '{print $1}' ${filebase0}eout.dat`
 echo "eigenvalues runtime: $runtime"
 
-#rm -r ${filebase0}rows
-#rm -r ${filebase0}columns
-#rm -r ${filebase0}data
+rm -r ${filebase0}rows
+rm -r ${filebase0}columns
+rm -r ${filebase0}data
 done

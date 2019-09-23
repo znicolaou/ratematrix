@@ -311,5 +311,7 @@ if args.eigenvalues>0:
     np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
 
     runtime=timeit.default_timer()-start
-    print(runtime)
+    out=open(filebase+"eout.dat","w")
+    print(runtime, eigenvalues[sorted[0]], eigenvalues[sorted[-1]], file=out)
+    out.close()
     sys.stdout.flush()
