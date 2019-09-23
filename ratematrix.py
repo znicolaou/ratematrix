@@ -1,6 +1,5 @@
 #!/usr/bin/env python
 import os
-os.environ["OMP_NUM_THREADS"]="1"
 import numpy as np
 import cantera as ct
 import timeit
@@ -125,7 +124,6 @@ refmass=refquant.mass
 refvol=refquant.volume
 refpotentials=refquant.chemical_potentials
 
-#TODO: add accumulate 2 to combine the rows, columns, data files to reduce excess
 #Calculate the space of possible states
 if args.accumulate==0:
     start=timeit.default_timer()
@@ -155,7 +153,7 @@ if args.accumulate==0:
             try:
                 gas.UVX=refenergy/refmass,refvol/refmass,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-                if(quant.T > 100): #far outside the range where these constants are valid...
+                if(quant.T > 10): #far outside the range where these constants are valid...
                     temperatures.append(quant.T)
                     pressures.append(quant.P/ct.one_atm)
                     accessible.append(multiindex)
@@ -304,13 +302,13 @@ if args.eigenvalues>0:
     ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(dim),int(dim)))
 
     if args.eigenvalues < ratematrix.shape[0]:
-        eigenvalues,eigenvectors=eigs(np.transpose(ratematrix), args.eigenvalues, sigma=1e-3, which='LM')
+        eigenvalues,eigenvectors=eigs(np.transpose(ratematrix), args.eigenvalues, sigma=-1e-1, which='LM')
     else:
-        eigenvalues,eigenvectors=np.eig(np.transpose(ratematrix))
+        eigenvalues,eigenvectors=np.linalg.eig(np.transpose(ratematrix.toarray()))
     sorted=np.argsort(eigenvalues)
     np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
     np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
 
     runtime=timeit.default_timer()-start
-    print("eigenvalues ", runtime)
+    print(runtime)
     sys.stdout.flush()
