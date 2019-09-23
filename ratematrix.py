@@ -190,7 +190,6 @@ if args.accumulate==0:
     np.save(filebase+"temperatures.npy",temperatures)
     np.save(filebase+"pressures.npy",pressures)
     out=open(filebase+"out.dat","w")
-    print("dimension ", dim, runtime)
 
     print(atot, dim, runtime, count, level, file=out)
     print(*refmultiindex, file=out)
@@ -268,9 +267,9 @@ if endrow>startrow:
     np.save(filebase+"columns/%i_%i.npy"%(startrow,endrow),columns)
     np.save(filebase+"data/%i_%i.npy"%(startrow,endrow),data)
     runtime=timeit.default_timer()-start
-    file=open(filebase+"_%icout.dat"%(start),"w")
-    print("sparsity ", len(rows)/(dim*dim), runtime, file=file)
-    close(file)
+    out=open(filebase+"_%icout.dat"%(start),"w")
+    print("sparsity ", len(rows)/(dim*dim), runtime, file=out)
+    out.close()
 
 #Calculate eigenvalues
 if args.eigenvalues>0:
