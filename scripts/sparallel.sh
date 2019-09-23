@@ -90,7 +90,8 @@ echo "calculate runtime: $runtime"
 
 evals=`bc <<< "$dim/20"`
 
-sleep 5
+sleep 1
+
 srun -N1 -n1 -Q ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature` &> /dev/null
 runtime=`awk '{print $1}' ${filebase0}eout.dat`
 echo "eigenvalues runtime: $runtime"
