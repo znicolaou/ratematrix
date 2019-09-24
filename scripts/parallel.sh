@@ -7,7 +7,7 @@
 #SBATCH --output=parallel.out
 threads=72
 
-for num in `seq 3 15`; do
+for num in `seq 10 15`; do
 mkdir -p data/h2o2
 
 echo $num
@@ -31,6 +31,7 @@ for i in `seq 0 $((4*num))`; do
 done
 end=`date +%s%N`
 wait
+sleep 1
 
 for i in `seq 0 $((4*num))`; do
   for j in `seq 0 $((2*num))`; do
@@ -92,7 +93,7 @@ evals=`bc <<< "$dim/20"`
 
 ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues 0 --propogate 1 --adiabatic $adiabatic --temperature $temperature
 runtime=`awk '{print $1}' ${filebase0}rout.dat`
-echo "propogate runtime: $runtime"
+echo "eigenvalues runtime: $runtime"
 
 rm -r ${filebase0}rows
 rm -r ${filebase0}columns
