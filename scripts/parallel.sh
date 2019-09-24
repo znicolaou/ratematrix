@@ -29,7 +29,7 @@ for i in `seq 0 $((4*num))`; do
     ./ratematrix.py --filebase ${filebase0}temp/${i}_${j} --reference 0 $((2*num)) 3 $num 4 1  --fix 1 $i 2 $j --calculate 0 0 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature &
   done
 done
-end=`date +%s`
+end=`date +%s%N`
 wait
 
 for i in `seq 0 $((4*num))`; do
@@ -55,6 +55,7 @@ mv ${filebase0}temp/out.dat $filebase0
 mv ${filebase0}temp/multiindices.npy $filebase0
 mv ${filebase0}temp/temperatures.npy $filebase0
 mv ${filebase0}temp/pressures.npy $filebase0
+
 rm -r ${filebase0}temp/
 
 end=`date +%s%N`
@@ -87,7 +88,7 @@ runtime=`bc -l <<< "($end-$starttime)*0.000000001"`
 echo "calculate cputime: $cputime"
 echo "calculate runtime: $runtime"
 
-evals=`bc <<< "$dim/20"`
+evals=`bc <<< "$num*20"`
 
 ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature
 runtime=`awk '{print $1}' ${filebase0}eout.dat`
