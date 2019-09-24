@@ -28,8 +28,7 @@ parser.add_argument("--propogate", type=int, required=False, default=0, choices=
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
 parser.add_argument("--tmax", type=float, required=False, default=1e-2, help='Final integration time for propogating.')
 parser.add_argument("--Nt", type=int, required=False, default=25, help='Number of times to propogate.')
-
-
+parser.add_argument("--print", type=int, required=False, default=1, choices=[0,1], help='Print runtimes.')
 args = parser.parse_args()
 
 #Functions for relating multiindices to matrix indices
@@ -159,7 +158,7 @@ if args.accumulate==0:
             try:
                 gas.UVX=refenergy/refmass,refvol/refmass,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-                if(quant.T > 10): #far outside the range where these constants are valid...
+                if(quant.T > 100): #far outside the range where these constants are valid...
                     temperatures.append(quant.T)
                     pressures.append(quant.P/ct.one_atm)
                     accessible.append(multiindex)
@@ -201,7 +200,8 @@ if args.accumulate==0:
     print(*refmultiindex, file=out)
     print(*elements, file=out)
     out.close()
-    sys.stdout.flush()
+    if(args.print == 1):
+        print("state space runtime: ", runtime)
 else:
     if os.path.isfile(filebase+"multiindices.npy"):
         multiindices=np.load(filebase+"multiindices.npy")
@@ -254,14 +254,11 @@ if endrow>startrow:
     data=[]
     rows=[]
     columns=[]
-    sys.stdout.flush()
     for rind in range(nr):
-        sys.stdout.flush()
         reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind, startrow, endrow)
         data+=reac_data
         rows+=reac_rows
         columns+=reac_columns
-    sys.stdout.flush()
     np.save(filebase+"spatoms.npy",sp_atoms)
     if not os.path.exists(filebase+"rows"):
         os.mkdir(filebase+"rows")
@@ -276,6 +273,8 @@ if endrow>startrow:
     out=open(filebase+"_%icout.dat"%(start),"w")
     print("sparsity ", len(rows)/(dim*dim), runtime, file=out)
     out.close()
+    if(args.print == 1):
+        print("calculate runtime:", runtime)
 
 #Calculate eigenvalues
 if args.eigenvalues>0:
@@ -320,7 +319,8 @@ if args.eigenvalues>0:
     out=open(filebase+"eout.dat","w")
     print(runtime, eigenvalues[sorted[0]], eigenvalues[sorted[-1]], file=out)
     out.close()
-    sys.stdout.flush()
+    if(args.print == 1):
+        print("eigenvalues runtime:", runtime)
 
 if args.propogate == 1:
     start=timeit.default_timer()
@@ -375,4 +375,5 @@ if args.propogate == 1:
     out=open(filebase+"rout.dat","w")
     print(runtime, file=out)
     out.close()
-    sys.stdout.flush()
+    if(args.print == 1):
+        print("propogate runtime:", runtime)
