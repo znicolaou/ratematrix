@@ -7,6 +7,7 @@ import argparse
 from scipy.sparse import coo_matrix, save_npz, load_npz
 from scipy.sparse.linalg import eigs
 from scipy.special import factorial
+from scipy.integrate import ode
 import sys
 import rlist
 import glob
@@ -23,6 +24,11 @@ parser.add_argument("--reference", type=int, nargs='+', required=False, default=
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
 parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
 parser.add_argument("--accumulate", type=int, required=False, default=0, choices=[0,1], help='Flag to accumulate the multiindices from parallel runs.')
+parser.add_argument("--propogate", type=int, required=False, default=0, choices=[0,1], help='Flag to propogate reference multiindex.')
+parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
+parser.add_argument("--tmax", type=float, required=False, default=1e-2, help='Final integration time for propogating.')
+parser.add_argument("--Nt", type=int, required=False, default=25, help='Number of times to propogate.')
+
 
 args = parser.parse_args()
 
@@ -315,3 +321,51 @@ if args.eigenvalues>0:
     print(runtime, eigenvalues[sorted[0]], eigenvalues[sorted[-1]], file=out)
     out.close()
     sys.stdout.flush()
+
+if args.propogate == 1:
+    if os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
+        rows=np.load(args.filebase+"rows.npy")
+        columns=np.load(args.filebase+"columns.npy")
+        data=np.load(args.filebase+"data.npy")
+    else:
+        files=glob.glob(args.filebase+"rows/*.npy")
+        rows=[]
+        for file in files:
+            row=np.load(file).tolist()
+            rows+=row
+        files=glob.glob(args.filebase+"columns/*.npy")
+        columns=[]
+        for file in files:
+            column=np.load(file).tolist()
+            columns+=column
+        files=glob.glob(args.filebase+"data/*.npy")
+        data=[]
+        for file in files:
+            dat=np.load(file).tolist()
+            data+=dat
+        np.save(filebase+"rows.npy",rows)
+        np.save(filebase+"columns.npy",columns)
+        np.save(filebase+"data.npy",data)
+
+    ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
+
+    A=ratematrix.toarray()
+    def func(t,y):
+        return ratematrix.dot(y)
+    def jac(t, y):
+        return A
+
+    y0=np.zeros(dim)
+    y0[get_index(refmultiindex)]=1
+    y0 = y0
+    r=ode(func, jac)
+    r.set_initial_value(y0).set_integrator('vode', atol=1e-8, rtol=1e-6, method='bdf', first_step=args.t0/100)
+
+    times=[args.t0*(args.tmax/args.t0)**(n*1.0/args.Nt) for n in range(args.Nt)]
+    vals=np.zeros((args.Nt,dim))
+    for n in range(len(times)):
+        r.integrate(times[n])
+        vals[n]=r.y
+        print(n/args.Nt,end="\t\r")
+    np.save(filebase+"times.npy",np.array(times))
+    np.save(filebase+"propogate.npy",vals)
