@@ -5,9 +5,9 @@
 #SBATCH -t 04:00:00
 #SBATCH --mem=7500
 #SBATCH --output=parallel.out
-threads=16
+threads=72
 
-for num in `seq 3 8`; do
+for num in `seq 3 15`; do
 mkdir -p data/h2o2
 
 echo $num
@@ -88,10 +88,10 @@ runtime=`bc -l <<< "($end-$starttime)*0.000000001"`
 echo "calculate cputime: $cputime"
 echo "calculate runtime: $runtime"
 
-evals=`bc <<< "$num*20"`
+evals=`bc <<< "$dim/20"`
 
-./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature
-runtime=`awk '{print $1}' ${filebase0}eout.dat`
+./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues 0 --propogate 1 --adiabatic $adiabatic --temperature $temperature
+runtime=`awk '{print $1}' ${filebase0}rout.dat`
 echo "eigenvalues runtime: $runtime"
 
 rm -r ${filebase0}rows

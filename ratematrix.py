@@ -323,6 +323,8 @@ if args.eigenvalues>0:
     sys.stdout.flush()
 
 if args.propogate == 1:
+    start=timeit.default_timer()
+
     if os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
         rows=np.load(args.filebase+"rows.npy")
         columns=np.load(args.filebase+"columns.npy")
@@ -366,6 +368,11 @@ if args.propogate == 1:
     for n in range(len(times)):
         r.integrate(times[n])
         vals[n]=r.y
-        print(n/args.Nt,end="\t\r")
     np.save(filebase+"times.npy",np.array(times))
     np.save(filebase+"propogate.npy",vals)
+
+    runtime=timeit.default_timer()-start
+    out=open(filebase+"rout.dat","w")
+    print(runtime)
+    out.close()
+    sys.stdout.flush()
