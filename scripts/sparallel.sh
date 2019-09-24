@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH -A p30575
-#SBATCH -n 200
+#SBATCH -n 400
 #SBATCH -p short
 #SBATCH -t 04:00:00
-#SBATCH --mem=75000
+#SBATCH --mem=100000
 #SBATCH --output=parallel.out
-threads=400
+threads=1000
 mem=150
 
 for num in `seq 10 25`; do
@@ -91,9 +91,9 @@ echo "calculate runtime: $runtime"
 evals=`bc <<< "$num*20"`
 
 sleep 5
-srun -N1 -n1 -Q ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues $evals --adiabatic $adiabatic --temperature $temperature &> /dev/null
-runtime=`awk '{print $1}' ${filebase0}eout.dat`
-echo "eigenvalues runtime: $runtime"
+srun -N1 -n1 -Q ./ratematrix.py --filebase ${filebase0} --reference 0 $((2*num)) 3 $num 4 1 --calculate 0 0 --accumulate 1 --eigenvalues 0 --propogate 1 --adiabatic $adiabatic --temperature $temperature &> /dev/null
+runtime=`awk '{print $1}' ${filebase0}rout.dat`
+echo "propogate runtime: $runtime"
 
 rm -r ${filebase0}rows
 rm -r ${filebase0}columns
