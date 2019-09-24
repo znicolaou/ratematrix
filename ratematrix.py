@@ -373,6 +373,6 @@ if args.propogate == 1:
 
     runtime=timeit.default_timer()-start
     out=open(filebase+"rout.dat","w")
-    print(runtime)
+    print(runtime, file=out)
     out.close()
     sys.stdout.flush()
