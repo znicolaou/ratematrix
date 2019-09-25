@@ -28,7 +28,7 @@ parser.add_argument("--propogate", type=int, required=False, default=0, choices=
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
 parser.add_argument("--tmax", type=float, required=False, default=1e-2, help='Final integration time for propogating.')
 parser.add_argument("--Nt", type=int, required=False, default=25, help='Number of times to propogate.')
-parser.add_argument("--print", type=int, required=False, default=1, choices=[0,1], help='Print runtimes.')
+parser.add_argument("--print", type=int, required=False, default=0, choices=[0,1], help='Print runtimes.')
 args = parser.parse_args()
 
 #Functions for relating multiindices to matrix indices
