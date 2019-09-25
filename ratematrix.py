@@ -6,7 +6,7 @@ import timeit
 import argparse
 from scipy.sparse import coo_matrix, save_npz, load_npz
 from scipy.sparse.linalg import eigs
-from scipy.special import factorial
+from scipy.special import factorial, binom
 from scipy.integrate import ode
 import sys
 import rlist
@@ -37,10 +37,11 @@ def get_multiindex(index):
 def get_index(multiindex):
     return np.where(np.all(multiindices==multiindex,axis=1))[0][0]
 
-#Function to get the transition rate given concentrations and rate constant
 def get_rate (multiindex, stoi, k, vol):
+
     if np.all(multiindex>=stoi):
-        return k*np.product(factorial(multiindex)/factorial(multiindex-stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
+        return k*np.product(binom(multiindex, stoi)*factorial(stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
+        # return k*np.product(factorial(multiindex)/factorial(multiindex-stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
     else:
         return 0.
 
@@ -201,6 +202,7 @@ if args.accumulate==0:
     print(*elements, file=out)
     out.close()
     if(args.print == 1):
+        print("state space dimension: ", dim)
         print("state space runtime: ", runtime)
 else:
     if os.path.isfile(filebase+"multiindices.npy"):

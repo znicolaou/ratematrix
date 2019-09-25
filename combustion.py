@@ -4,8 +4,9 @@ import sys
 import numpy as np
 import cantera as ct
 import timeit
+import argparse
 
-def runsim ( ):
+def runsim (times):
     if(pressureflag==0):
         if(energyflag==1):
             r = ct.IdealGasReactor(gas, name='R1')
@@ -30,7 +31,7 @@ def runsim ( ):
 
     states = ct.SolutionArray(gas, extra=['t','sens'])
 
-    for t in np.arange(0, tmax, dt):
+    for t in times:
         sim.advance(t)
 
         sensitivities=[]
@@ -42,49 +43,46 @@ def runsim ( ):
         states.append(r.thermo.state, t=t, sens=sensitivities)
     return states
 
-if(len(sys.argv) != 12):
-    print(len(sys.argv))
-    print('usage: python2 experiment.py [Npoints] [tmax] [temperature] [pressure] [phi] [dilute] [sensitivities] [energy] [constantpressure] [methane] [out]')
-    print('Npoints is the number of points between 0 and tmax to output')
-    print('tmax is maximum time to integrate')
-    print('temperature is initial temperature')
-    print('pressure is initial pressure')
-    print('phi is initial ratio of fuel/O2 (one OH per hundred O2 is used initially to start chain reaction)')
-    print('dilute is initial ratio of Ar/O2')
-    print('sensitivities is 1 to calculate sensitivities, 0 otherwise')
-    print('energy is 1 for adiabatic, 0 for isothermal')
-    print('constantpressure is 1 for constant pressure, 0 for constant volume')
-    print('methane is 1 for methane combustion, 0 for hydrogen volume')
-    print('out is output file')
-    print('example: python combustion.py  10000 2e-6 2000 100 1 0 0 1 0 1 ch4test.csv')
-    print('example: python combustion.py  10000 2e-8 2000 100 2 0 1 1 0 0 h2test.csv')
-    exit()
+parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
+parser.add_argument("--filebase", type=str, required=True, dest='filebase', help='Base string for npy file output. Three files will be created for each reaction, storing rates, row indices, and column indices.')
+parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
+parser.add_argument("--adiabatic", type=int, choices=[0, 1, 2], required=False, default=0, help='Convert energy from reactions to heat. The values 0, 1, and 2 correspond to constant volume/temperature, constant volume/energy, and constant pressure/enthalpy, respectively. The temperature is specify the reference multiindix specified with --reference. ')
+parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 4, 3, 2, 8, 0], help='Reference multiindex for which the temperature and number of atoms are specified. Default 0 4 3 2 8 0.')
+parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
+parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
+parser.add_argument("--tmax", type=float, required=False, default=1e-2, help='Final integration time for propogating.')
+parser.add_argument("--Npoints", type=int, required=False, default=25, help='Number of times to propogate.')
+parser.add_argument("--sensitivities", type=int, required=False, choices=[0,1],default=1, help='Flag to calculate sensitivities.')
+args = parser.parse_args()
 
 start=timeit.default_timer()
-Npoints = int(sys.argv[1])
-tmax=float(sys.argv[2])
-temperature=float(sys.argv[3])
-pressure=float(sys.argv[4])*ct.one_atm
-phi=float(sys.argv[5])
-dilute=float(sys.argv[6])
-sensflag=int(sys.argv[7])
-energyflag=int(sys.argv[8])
-pressureflag=int(sys.argv[9])
-methaneflag=int(sys.argv[10])
-out=sys.argv[11]
+Npoints = args.Npoints
+t0=args.t0
+tmax=args.tmax
+temperature=args.temperature
+pressure=args.pressure*ct.one_atm
+sensflag=args.sensitivities
+if args.adiabatic == 0:
+    energyflag=0
+    pressureflag=1
+elif args.adiabatic == 1:
+    energyflag=1
+    pressureflag=0
+else:
+    energyflag=1
+    pressureflag=1
+out=args.filebase
 
 #Change initial conditions here
-if (methaneflag==1):
-    gas = ct.Solution('gri30.cti')
-    gas.X = ('CH4:%f, O2:1, N2:4, OH:0.01, Ar:%f'%(phi, 0.05+dilute))
-else:
-    gas = ct.Solution('h2o2.cti')
-    gas.X = ('H2:%f, O2:1, OH:0.0, Ar:%f'%(phi, dilute))
+gas = ct.Solution('h2o2.cti')
+ns=gas.n_species
+refmultiindex=np.zeros(ns,dtype=int)
+for i in range(0,len(args.reference),2):
+    refmultiindex[args.reference[i]]=args.reference[i+1]
+gas.TPX = temperature, pressure, refmultiindex
+times=[t0*(tmax/t0)**(n*1.0/Npoints) for n in range(Npoints)]
 
-dt = tmax/Npoints
-gas.TP = temperature, pressure
-
-observation=runsim()
+observation=runsim(times)
 
 species = gas.species_names
 reactions = gas.reactions()
