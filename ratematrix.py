@@ -279,6 +279,8 @@ if endrow>startrow:
         print("calculate runtime:", runtime)
 
 #Calculate eigenvalues
+if args.eigenvalues==-1:
+    args.eigenvalues=dim
 if args.eigenvalues>0:
     #accumulate rows, data, and columns
     start=timeit.default_timer()
@@ -309,6 +311,8 @@ if args.eigenvalues>0:
 
     ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(dim),int(dim)))
 
+
+    print(args.eigenvalues)
     if args.eigenvalues < ratematrix.shape[0]:
         eigenvalues,eigenvectors=eigs(np.transpose(ratematrix), args.eigenvalues, sigma=-1e-1, which='LM')
     else:
