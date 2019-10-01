@@ -357,17 +357,18 @@ if args.propogate == 1:
 
     ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
 
-    A=ratematrix.toarray()
+    # A=ratematrix.toarray()
     def func(t,y):
         return ratematrix.dot(y)
-    def jac(t, y):
-        return A
+    # def jac(t, y):
+        # return A
 
     y0=np.zeros(dim)
     y0[get_index(refmultiindex)]=1
     y0 = y0
-    r=ode(func, jac)
-    r.set_initial_value(y0).set_integrator('vode', atol=1e-8, rtol=1e-6, method='bdf', first_step=args.t0/100)
+    # r=ode(func, jac)
+    r=ode(func)
+    r.set_initial_value(y0).set_integrator('dopri5', atol=1e-8, rtol=1e-6, first_step=args.t0/1000, nsteps=10000)
 
     times=[args.t0*(args.tmax/args.t0)**(n*1.0/args.Nt) for n in range(args.Nt)]
     vals=np.zeros((args.Nt,dim))
