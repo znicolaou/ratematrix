@@ -18,16 +18,16 @@ parser.add_argument("--filebase", type=str, required=True, dest='filebase', help
 parser.add_argument("--mechanism", type=str, required=False, default='mechanisms/h2o2.cti', dest='mechanism', help='Mechanism cti file. Default mechanisms/h2o2.cti.')
 parser.add_argument("--calculate", nargs=2, type=int, required=False, default=[0,-1], help='Rows to calculate in rate matrix. Takes starting index and ending index and save rate matrix corresponding to all reactions over these rows. Default [0 -1].')
 parser.add_argument("--eigenvalues", type=int, required=False, default=50, help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
-parser.add_argument("--temperature", type=float, required=False, default=1500, help='Temperature in Kelvin. Default 1500.')
-parser.add_argument("--adiabatic", type=int, choices=[0, 1, 2], required=False, default=0, help='Convert energy from reactions to heat. The values 0, 1, and 2 correspond to constant volume/temperature, constant volume/energy, and constant pressure/enthalpy, respectively. The temperature is specify the reference multiindix specified with --reference. ')
+parser.add_argument("--temperature", type=float, required=False, default=1000, help='Temperature in Kelvin. Default 1500.')
+parser.add_argument("--adiabatic", type=int, choices=[0, 1, 2], required=False, default=1, help='Convert energy from reactions to heat. The values 0, 1, and 2 correspond to constant volume/temperature, constant volume/energy, and constant pressure/enthalpy, respectively. The temperature is specify the reference multiindix specified with --reference. ')
 parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 4, 3, 2, 8, 0], help='Reference multiindex for which the temperature and number of atoms are specified. Default 0 4 3 2 8 0.')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
 parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
 parser.add_argument("--accumulate", type=int, required=False, default=0, choices=[0,1], help='Flag to accumulate the multiindices from parallel runs.')
 parser.add_argument("--propogate", type=int, required=False, default=0, choices=[0,1], help='Flag to propogate reference multiindex.')
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
-parser.add_argument("--tmax", type=float, required=False, default=1e-2, help='Final integration time for propogating.')
-parser.add_argument("--Nt", type=int, required=False, default=25, help='Number of times to propogate.')
+parser.add_argument("--tmax", type=float, required=False, default=1, help='Final integration time for propogating.')
+parser.add_argument("--Nt", type=int, required=False, default=100, help='Number of times to propogate.')
 parser.add_argument("--print", type=int, required=False, default=0, choices=[0,1], help='Print runtimes.')
 args = parser.parse_args()
 
@@ -357,18 +357,20 @@ if args.propogate == 1:
 
     ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
 
-    # A=ratematrix.toarray()
     def func(t,y):
         return ratematrix.dot(y)
+    # A=ratematrix.toarray()
     # def jac(t, y):
         # return A
+    # r=ode(func, jac)
+    r=ode(func)
 
     y0=np.zeros(dim)
     y0[get_index(refmultiindex)]=1
     y0 = y0
-    # r=ode(func, jac)
-    r=ode(func)
-    r.set_initial_value(y0).set_integrator('dopri5', atol=1e-8, rtol=1e-6, first_step=args.t0/1000, nsteps=10000)
+
+    # r.set_initial_value(y0).set_integrator('vode', atol=1e-8, rtol=1e-6, method='bdf', first_step=args.t0/1000, nsteps=10000)
+    r.set_initial_value(y0).set_integrator('lsoda', atol=1e-8, rtol=1e-6, first_step=args.t0/100, nsteps=10000)
 
     times=[args.t0*(args.tmax/args.t0)**(n*1.0/args.Nt) for n in range(args.Nt)]
     vals=np.zeros((args.Nt,dim))
