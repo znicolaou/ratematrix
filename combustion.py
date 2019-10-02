@@ -5,6 +5,8 @@ import numpy as np
 import cantera as ct
 import timeit
 import argparse
+from scipy.sparse import coo_matrix
+
 
 def runsim (times):
     if(pressureflag==0):
@@ -29,18 +31,77 @@ def runsim (times):
         sim.rtol_sensitivity = 1.0e-6
         sim.atol_sensitivity = 1.0e-6
 
-    states = ct.SolutionArray(gas, extra=['t','sens'])
+    states = ct.SolutionArray(gas, extra=['t','matrices', 'evals', 'evecs', 'sens'])
 
     for t in times:
         sim.advance(t)
 
         sensitivities=[]
+        data=[]
+        rows=[]
+        columns=[]
+        mat=[]
+        evals=[]
+        evecs=[]
         if(sensflag==1):
             for j in range(0, gas.n_total_species):
                 for k in range(0, gas.n_reactions):
                     sensitivities.append(sim.sensitivity(gas.species_names[j], k))
 
-        states.append(r.thermo.state, t=t, sens=sensitivities)
+        if(quasilinear==1):
+            concentrations=gas.X/(ct.gas_constant*gas.T/gas.P)
+            for rind in range(len(gas.reactions())):
+                reaction=gas.reactions()[rind]
+                rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
+                pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species])
+                for n in np.where(rstoi>0)[0]: #row of the matrix, equation for species n
+                    #forward reaction with species[n] a reactant
+                    for m in np.where(rstoi>0)[0]:
+                        order=rstoi[m]
+                        num=np.sum(rstoi)
+                        rstoi[m]-=1 #remaining reactants after factoring out species[m]
+                        k=gas.forward_rate_constants[rind]
+                        data.append(-order/num*k*np.product(concentrations**(rstoi)))
+                        rows.append(n)
+                        columns.append(m)
+                        rstoi[m]+=1
+                    #reverse reaction with species[n] a product
+                    for m in np.where(pstoi>0)[0]:
+                        order=pstoi[m]
+                        num=np.sum(pstoi)
+                        pstoi[m]-=1  #remaining reactants after factoring out species[m]
+                        k=gas.reverse_rate_constants[rind]
+                        data.append(order/num*k*np.product(concentrations**(pstoi)))
+                        rows.append(n)
+                        columns.append(m)
+                        pstoi[m]+=1
+                for n in np.where(pstoi>0)[0]: #row of the matrix, equation for species n
+                    #forward reaction with species[n] a product
+                    for m in np.where(rstoi>0)[0]:
+                        order=rstoi[m]
+                        num=np.sum(rstoi)
+                        rstoi[m]-=1 #remaining reactants after removing species[m]
+                        k=gas.forward_rate_constants[rind]
+                        data.append(order/num*k*np.product(concentrations**(rstoi)))
+                        rows.append(n)
+                        columns.append(m)
+                        rstoi[m]+=1
+                    #reverse reaction with species[n] a reactant
+                    for m in np.where(pstoi>0)[0]:
+                        order=pstoi[m]
+                        num=np.sum(pstoi)
+                        pstoi[m]-=1 #remaining reactants after removing species[m]
+                        k=gas.reverse_rate_constants[rind]
+                        data.append(-order/num*k*np.product(concentrations**(pstoi)))
+                        rows.append(n)
+                        columns.append(m)
+                        pstoi[m]+=1
+
+            mat =coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(gas.n_species),int(gas.n_species))).toarray()
+            eigenvalues,eigenvectors=np.linalg.eig(mat)
+            sorted=np.argsort(np.abs(eigenvalues))
+        states.append(r.thermo.state, t=t, sens=sensitivities, matrices=mat, evals=eigenvalues[sorted], evecs=eigenvectors[sorted])
+
     return states
 
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
@@ -52,7 +113,9 @@ parser.add_argument("--pressure", type=float, required=False, default=1, help='P
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
 parser.add_argument("--tmax", type=float, required=False, default=1, help='Final integration time for propogating.')
 parser.add_argument("--Npoints", type=int, required=False, default=100, help='Number of times to propogate.')
-parser.add_argument("--sensitivities", type=int, required=False, choices=[0,1],default=1, help='Flag to calculate sensitivities.')
+parser.add_argument("--sensitivities", type=int, required=False, choices=[0,1],default=0, help='Flag to calculate sensitivities.')
+parser.add_argument("--quasilinear", type=int, required=False, choices=[0,1],default=0, help='Flag to calculate linearized matrix and eigenvalues.')
+parser.add_argument("--mechanism", type=str, required=False,default='h2o2.cti', help='Cantera mechanism file.')
 args = parser.parse_args()
 
 start=timeit.default_timer()
@@ -62,6 +125,8 @@ tmax=args.tmax
 temperature=args.temperature
 pressure=args.pressure*ct.one_atm
 sensflag=args.sensitivities
+quasilinear=args.quasilinear
+
 if args.adiabatic == 0:
     energyflag=0
     pressureflag=1
@@ -74,7 +139,9 @@ else:
 out=args.filebase
 
 #Change initial conditions here
-gas = ct.Solution('h2o2.cti')
+gas = ct.Solution(args.mechanism)
+species=gas.species_names
+reactions = gas.reactions()
 ns=gas.n_species
 refmultiindex=np.zeros(ns,dtype=int)
 for i in range(0,len(args.reference),2):
@@ -89,29 +156,12 @@ np.save(args.filebase+"times.npy", observation.t)
 np.save(args.filebase+"concentrations.npy", observation.X)
 np.save(args.filebase+"temperatures.npy", observation.T)
 np.save(args.filebase+"pressures.npy", observation.P/ct.one_atm)
-
-# species = gas.species_names
-# reactions = gas.reactions()
-# f=open(out,'w')
-# outarray=[]
-# outarray.append(observation.t)
-# outarray.append(observation.T)
-# outarray.append((observation.P/ct.one_atm))
-# columns='t,T,P'
-#
-# for j in range(0, gas.n_total_species):
-#     columns=columns + ',[%s]'%(gas.species_names[j])
-#     outarray.append([item for sublist in observation(gas.species_names[j]).X for item in sublist])
-# for j in range(0, gas.n_reactions):
-#     columns=columns + ',%s Flux'%(str(reactions[j].reactants).replace(" ","").replace(",","+").replace("{","").replace("}","")+"->"+str(reactions[j].products).replace(" ","").replace(",","+").replace("{","").replace("}",""))
-#     outarray.append(np.transpose(observation.net_rates_of_progress)[j])
-# if(sensflag==1):
-#     for j in range(0, gas.n_total_species):
-#         for k in range(0, gas.n_reactions):
-#             columns=columns + ',%s %s-Sensitivity'%(str(reactions[k].reactants).replace(" ","").replace(",","+").replace("{","").replace("}","")+"->"+str(reactions[k].products).replace(" ","").replace(",","+").replace("{","").replace("}",""), gas.species_names[j])
-#             outarray.append(np.array(observation.sens).transpose()[j*gas.n_reactions+k])
-#
-# np.savetxt(out, np.transpose(outarray), delimiter=',', header=columns, comments='')
+if quasilinear==1:
+    np.save(args.filebase+"matrices.npy", observation.matrices)
+    np.save(args.filebase+"eigenvalues.npy", observation.evals)
+    np.save(args.filebase+"eigenvectors.npy", observation.evecs)
+if sensflag==1:
+    np.save(args.filebase+"sensitivities.npy", observation.sens)
 
 stop=timeit.default_timer()
 print ('runtime: %f'%(stop-start))
