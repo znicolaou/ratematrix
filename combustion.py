@@ -41,8 +41,8 @@ def runsim (times):
         rows=[]
         columns=[]
         mat=[]
-        evals=[]
-        evecs=[]
+        eigenvalues=[]
+        eigenvectors=[]
         if(sensflag==1):
             for j in range(0, gas.n_total_species):
                 for k in range(0, gas.n_reactions):
@@ -61,9 +61,10 @@ def runsim (times):
                         num=np.sum(rstoi)
                         rstoi[m]-=1 #remaining reactants after factoring out species[m]
                         k=gas.forward_rate_constants[rind]
-                        data.append(-order/num*k*np.product(concentrations**(rstoi)))
-                        rows.append(n)
-                        columns.append(m)
+                        if k>0 and np.isfinite(k):
+                            data.append(-order/num*k*np.product(concentrations**(rstoi)))
+                            rows.append(n)
+                            columns.append(m)
                         rstoi[m]+=1
                     #reverse reaction with species[n] a product
                     for m in np.where(pstoi>0)[0]:
@@ -71,9 +72,10 @@ def runsim (times):
                         num=np.sum(pstoi)
                         pstoi[m]-=1  #remaining reactants after factoring out species[m]
                         k=gas.reverse_rate_constants[rind]
-                        data.append(order/num*k*np.product(concentrations**(pstoi)))
-                        rows.append(n)
-                        columns.append(m)
+                        if k>0 and np.isfinite(k):
+                            data.append(order/num*k*np.product(concentrations**(pstoi)))
+                            rows.append(n)
+                            columns.append(m)
                         pstoi[m]+=1
                 for n in np.where(pstoi>0)[0]: #row of the matrix, equation for species n
                     #forward reaction with species[n] a product
@@ -82,9 +84,10 @@ def runsim (times):
                         num=np.sum(rstoi)
                         rstoi[m]-=1 #remaining reactants after removing species[m]
                         k=gas.forward_rate_constants[rind]
-                        data.append(order/num*k*np.product(concentrations**(rstoi)))
-                        rows.append(n)
-                        columns.append(m)
+                        if k>0 and np.isfinite(k):
+                            data.append(order/num*k*np.product(concentrations**(rstoi)))
+                            rows.append(n)
+                            columns.append(m)
                         rstoi[m]+=1
                     #reverse reaction with species[n] a reactant
                     for m in np.where(pstoi>0)[0]:
@@ -92,15 +95,18 @@ def runsim (times):
                         num=np.sum(pstoi)
                         pstoi[m]-=1 #remaining reactants after removing species[m]
                         k=gas.reverse_rate_constants[rind]
-                        data.append(-order/num*k*np.product(concentrations**(pstoi)))
-                        rows.append(n)
-                        columns.append(m)
+                        if k>0 and np.isfinite(k):
+                            data.append(-order/num*k*np.product(concentrations**(pstoi)))
+                            rows.append(n)
+                            columns.append(m)
                         pstoi[m]+=1
 
             mat =coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(gas.n_species),int(gas.n_species))).toarray()
             eigenvalues,eigenvectors=np.linalg.eig(mat)
             sorted=np.argsort(np.abs(eigenvalues))
-        states.append(r.thermo.state, t=t, sens=sensitivities, matrices=mat, evals=eigenvalues[sorted], evecs=eigenvectors[sorted])
+            eigenvalues=eigenvalues[sorted]
+            eigenvectors=eigenvectors[sorted]
+        states.append(r.thermo.state, t=t, sens=sensitivities, matrices=mat, evals=eigenvalues, evecs=eigenvectors)
 
     return states
 
@@ -156,12 +162,12 @@ np.save(args.filebase+"times.npy", observation.t)
 np.save(args.filebase+"concentrations.npy", observation.X)
 np.save(args.filebase+"temperatures.npy", observation.T)
 np.save(args.filebase+"pressures.npy", observation.P/ct.one_atm)
-if quasilinear==1:
-    np.save(args.filebase+"matrices.npy", observation.matrices)
-    np.save(args.filebase+"eigenvalues.npy", observation.evals)
-    np.save(args.filebase+"eigenvectors.npy", observation.evecs)
-if sensflag==1:
-    np.save(args.filebase+"sensitivities.npy", observation.sens)
+# if quasilinear==1:
+np.save(args.filebase+"matrices.npy", observation.matrices)
+np.save(args.filebase+"eigenvalues.npy", observation.evals)
+np.save(args.filebase+"eigenvectors.npy", observation.evecs)
+# if sensflag==1:
+np.save(args.filebase+"sensitivities.npy", observation.sens)
 
 stop=timeit.default_timer()
 print ('runtime: %f'%(stop-start))
