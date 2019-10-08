@@ -5,7 +5,7 @@ import cantera as ct
 import timeit
 import argparse
 from scipy.sparse import coo_matrix, save_npz, load_npz
-from scipy.sparse.linalg import eigs
+from scipy.sparse.linalg import eigs, svds
 from scipy.special import factorial, binom
 from scipy.integrate import ode
 import sys
@@ -309,16 +309,17 @@ if args.eigenvalues>0:
         np.save(filebase+"columns.npy",columns)
         np.save(filebase+"data.npy",data)
 
-    ratematrix=coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(dim),int(dim)))
+    ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
 
-
-    print(args.eigenvalues)
     if args.eigenvalues < ratematrix.shape[0]:
-        eigenvalues,eigenvectors=eigs(np.transpose(ratematrix), args.eigenvalues, sigma=-1e-1, which='LM')
+        eigenvalues,eigenvectors=eigs(ratematrix, args.eigenvalues, sigma=-1e-1, which='LM')
+        svals=svds(ratematrix, args.eigenvalues, which='SM', return_singular_vectors=False)
     else:
-        eigenvalues,eigenvectors=np.linalg.eig(np.transpose(ratematrix.toarray()))
+        eigenvalues,eigenvectors=np.linalg.eig(ratematrix.toarray())
+        svals=np.linalg.svd(ratematrix.toarray(),compute_uv=False)
     sorted=np.argsort(eigenvalues)
     np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
+    np.save(filebase+"singularvalues.npy",svals)
     np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
 
     runtime=timeit.default_timer()-start
