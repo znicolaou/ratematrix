@@ -4,10 +4,11 @@ import numpy as np
 import cantera as ct
 import timeit
 import argparse
+import resource
 from scipy.sparse import coo_matrix, save_npz, load_npz
 from scipy.sparse.linalg import eigs, svds
 from scipy.special import factorial, binom
-from scipy.integrate import ode
+from scipy.integrate import ode, solve_ivp
 import sys
 import rlist
 import glob
@@ -145,6 +146,10 @@ if args.accumulate==0:
     for i in range(0,len(fixed),2):
         remove_atoms += fixed[i+1]*sp_atoms[fixed[i]]
     multiindices,count,level=rlist.list(atoms-remove_atoms.astype(int), sp_atoms, fixed[::2].astype(int))
+    print(atoms)
+    print(multiindices.shape)
+    print(multiindices[0:10])
+    quit()
     for i in range(0,len(fixed),2):
         multiindices[:,fixed[i]]=fixed[i+1]
 
@@ -313,7 +318,8 @@ if args.eigenvalues>0:
 
     if args.eigenvalues < ratematrix.shape[0]:
         eigenvalues,eigenvectors=eigs(ratematrix, args.eigenvalues, sigma=-1e-1, which='LM')
-        svals=svds(ratematrix, args.eigenvalues, which='SM', return_singular_vectors=False)
+        # svals=svds(ratematrix, args.eigenvalues, which='SM', return_singular_vectors=False)
+        svals=np.array(dim)
     else:
         eigenvalues,eigenvectors=np.linalg.eig(ratematrix.toarray())
         svals=np.linalg.svd(ratematrix.toarray(),compute_uv=False)
@@ -324,7 +330,9 @@ if args.eigenvalues>0:
 
     runtime=timeit.default_timer()-start
     out=open(filebase+"eout.dat","w")
-    print(runtime, eigenvalues[sorted[0]], eigenvalues[sorted[-1]], file=out)
+    print(runtime, file=out)
+    print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
+    print(dim, file=out)
     out.close()
     if(args.print == 1):
         print("eigenvalues runtime:", runtime)
@@ -360,30 +368,29 @@ if args.propogate == 1:
 
     def func(t,y):
         return ratematrix.dot(y)
-    # A=ratematrix.toarray()
+    #
+    # jacarray=ratematrix.toarray()
     # def jac(t, y):
-        # return A
-    # r=ode(func, jac)
-    r=ode(func)
+    #     return jacarray
 
     y0=np.zeros(dim)
-    y0[get_index(refmultiindex)]=1
-    y0 = y0
-
-    # r.set_initial_value(y0).set_integrator('vode', atol=1e-8, rtol=1e-6, method='bdf', first_step=args.t0/1000, nsteps=10000)
-    r.set_initial_value(y0).set_integrator('lsoda', atol=1e-8, rtol=1e-6, first_step=args.t0/100, nsteps=10000)
-
+    y0[get_index(refmultiindex)]=1.0
     times=[args.t0*(args.tmax/args.t0)**(n*1.0/args.Nt) for n in range(args.Nt)]
-    vals=np.zeros((args.Nt,dim))
-    for n in range(len(times)):
-        r.integrate(times[n])
-        vals[n]=r.y
+    sol=solve_ivp(func,[0,args.tmax], y0, method='BDF', t_eval=times, atol=1e-8, rtol=1e-6, first_step=args.t0/100, jac=ratematrix)
+    # sol=solve_ivp(func,[0,args.tmax], y0, method='LSODA', t_eval=times, atol=1e-8, rtol=1e-6, first_step=args.t0/100, jac=jac)
+    vals=np.transpose(np.array(sol.y)).tolist()
+
     np.save(filebase+"times.npy",np.array(times))
     np.save(filebase+"propogate.npy",vals)
 
     runtime=timeit.default_timer()-start
     out=open(filebase+"rout.dat","w")
     print(runtime, file=out)
+    print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
+    print(dim, file=out)
     out.close()
     if(args.print == 1):
+        print("propogate success:", sol.success)
         print("propogate runtime:", runtime)
+if(args.print == 1):
+    print("memory:", resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
