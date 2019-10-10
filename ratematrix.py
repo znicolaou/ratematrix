@@ -146,10 +146,7 @@ if args.accumulate==0:
     for i in range(0,len(fixed),2):
         remove_atoms += fixed[i+1]*sp_atoms[fixed[i]]
     multiindices,count,level=rlist.list(atoms-remove_atoms.astype(int), sp_atoms, fixed[::2].astype(int))
-    print(atoms)
-    print(multiindices.shape)
-    print(multiindices[0:10])
-    quit()
+
     for i in range(0,len(fixed),2):
         multiindices[:,fixed[i]]=fixed[i+1]
 
@@ -208,6 +205,8 @@ if args.accumulate==0:
     out.close()
     if(args.print == 1):
         print("state space dimension: ", dim)
+        print("state space level: ", level)
+        print("state space calls: ", count)
         print("state space runtime: ", runtime)
 else:
     if os.path.isfile(filebase+"multiindices.npy"):

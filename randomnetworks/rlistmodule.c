@@ -8,12 +8,14 @@ static void printMultiindex (Multiindex mult) {
   }
   printf("species: ");
   for (int i=0; i<mult.ns; i++) {
-    printf("%hi", mult.species[i]);
+    printf("%hi ", mult.species[i]);
   }
   printf("\n");
 }
 
-static void recursive_list(Multiindex current, MultiindexVector last_avail, MultiindexSet &previously_enumerated, MultiindexVector &ret, long int &count, long int &maxlevel, long int level){
+static void recursive_list(Multiindex current, MultiindexVector avail, MultiindexVector reactions, MultiindexSet &previously_enumerated, MultiindexVector &ret, long int &count, long int &maxlevel, long int level){
+
+  // while(avail) {}
   previously_enumerated.insert(current);
   count++;
   //Base case - check is all atoms have been exhausted, if so add current to ret
@@ -27,28 +29,29 @@ static void recursive_list(Multiindex current, MultiindexVector last_avail, Mult
   //recursive cases
 
   //Check from the previous set of available species which reactions are still available
-  MultiindexVector avail;
-  avail.reserve(last_avail.size());
-  for (auto itr = last_avail.begin(); itr != last_avail.end(); ++itr) {
-    int remove=0;
-    for(int i =0; i < current.ns; i++)
-      if(current.species[i] + itr->species[i] < 0)
-        remove=1;
-    if(remove==0)
-      avail.push_back(*itr);
-  }
+
   //Loop through available reactions, create the next multiindex, and recurse if next has not been previously enumerated
   for (auto itr = avail.begin(); itr != avail.end(); ++itr) {
     Multiindex next(current.na, current.ns);
     for(int i=0; i<next.ns; i++)
       next.species[i]=current.species[i]+itr->species[i];
-    // for(int i=0; i<next.na; i++)
-    //   next.atoms[i]=current.atoms[i]-itr->atoms[i];
+    //we need to populate the next_avail here on the basis of all reactions, not just the previously available ones
+    for(int i=0; i<next.na; i++)
+      next.atoms[i]=current.atoms[i];
+    MultiindexVector next_avail;
+    next_avail.reserve(reactions.size());
+    for (auto itr = reactions.begin(); itr != reactions.end(); ++itr) {
+      int remove=0;
+      for(int i =0; i < current.ns; i++)
+        if(next.species[i] + itr->species[i] < 0)
+          remove=1;
+      if(remove==0)
+        next_avail.push_back(*itr);
+    }
     if(previously_enumerated.find(next)==previously_enumerated.end()){
-      printf("r\n");
       if(level+1>maxlevel)
         maxlevel=level+1;
-      recursive_list(next,avail,previously_enumerated,ret,count,maxlevel,level+1);
+      recursive_list(next,next_avail,reactions,previously_enumerated,ret,count,maxlevel,level+1);
     }
   }
 
@@ -82,7 +85,7 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
     long int ne=dexclude[0]; //num atoms
     long int nr=dreactions[1]; //num atoms
     MultiindexSet previously_enumerated;
-    MultiindexVector avail, list;
+    MultiindexVector avail, allreac, list;
     //initialize the current multiindex with zeros and the number of atoms
     Multiindex current(na, ns);
     for (int i=0; i<na; i++)
@@ -93,32 +96,25 @@ static PyObject *rlist_list(PyObject *self, PyObject* args){
         current.atoms[j]+=spatomsptr[na*i+j]*speciesptr[i];
     }
 
-    printMultiindex(current);
-    printf("%i %i %i\n", na, ns, nr);
-    //initialize avail with all reactions
+    //populate reactions and avail with available reactions
     for (int i =0; i<nr; i++){
       Multiindex add(na, ns);
       for(int j =0; j<na; j++)
         add.atoms[j]=0;
       for(int j=0; j<ns; j++)
         add.species[j]=reactionsptr[nr*j+i];
+      allreac.push_back(add);
       int remove=0;
-      // for(int j =0; j < na; j++)
-      //   if(current.atoms[j] - add.atoms[j] < 0)
-      //     remove=1;
-      // for(int j = 0; j < ne; j++){
-      //   if(i == excludeptr[j])
-      //     remove=1;
-      // }
-      if(remove!=1){
-        printMultiindex(add);
+      for(int i =0; i < current.ns; i++)
+        if(current.species[i] + add.species[i] < 0)
+          remove=1;
+      if(remove==0)
         avail.push_back(add);
-      }
     }
 
     long int count=0;
     long int maxlevel=0;
-    recursive_list(current, avail, previously_enumerated, list, count, maxlevel, 0);
+    recursive_list(current, avail, allreac, previously_enumerated, list, count, maxlevel, 0);
 
     //Populate the numpy output arrays with the information to return to Python
     // long int* data = new long int[list.size()*ns];

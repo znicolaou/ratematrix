@@ -145,14 +145,12 @@ if args.accumulate==0:
     for i in range(0,len(fixed),2):
         remove_atoms += fixed[i+1]*sp_atoms[fixed[i]]
 
-    print(refmultiindex)
-    rvecs=gas.reactant_stoich_coeffs()-gas.product_stoich_coeffs()
-    print(np.transpose(rvecs.astype(int)))
+    frvecs=gas.reactant_stoich_coeffs()-gas.product_stoich_coeffs()
+    rrvecs=gas.product_stoich_coeffs()-gas.reactant_stoich_coeffs()
+    rvecs=np.column_stack((frvecs,rrvecs))
     # multiindices,count,level=rlist.list(atoms-remove_atoms.astype(int), sp_atoms, fixed[::2].astype(int))
     multiindices,count,level=rlist.list(refmultiindex, sp_atoms, fixed[::2].astype(int), rvecs.astype(int))
-    print(multiindices.shape)
-    print(multiindices)
-    quit()
+
     for i in range(0,len(fixed),2):
         multiindices[:,fixed[i]]=fixed[i+1]
 
@@ -211,6 +209,8 @@ if args.accumulate==0:
     out.close()
     if(args.print == 1):
         print("state space dimension: ", dim)
+        print("state space level: ", level)
+        print("state space calls: ", count)
         print("state space runtime: ", runtime)
 else:
     if os.path.isfile(filebase+"multiindices.npy"):
