@@ -14,44 +14,59 @@ static void printMultiindex (Multiindex mult) {
 }
 
 static void recursive_list(Multiindex current, MultiindexVector avail, MultiindexVector reactions, MultiindexSet &previously_enumerated, MultiindexVector &ret, long int &count, long int &maxlevel, long int level){
-
-  // while(avail) {}
+  //create a stack to hold the list of next states. In each loop, calculate the available reactions and add the next states to the stack. Loop while the stack is not empty.
+  MultiindexVector stack;
+  stack.push_back(current);
   previously_enumerated.insert(current);
-  count++;
-  //Base case - check is all atoms have been exhausted, if so add current to ret
-  // int exhausted=1;
-  // for(int i =0; i < current.na; i++)
-  //   if(current.atoms[i] != 0)
-  //     exhausted=0;
-  // if(exhausted==1)
-  // Add the current state to ret
-  ret.push_back(current);
-  //recursive cases
 
-  //Check from the previous set of available species which reactions are still available
+  while(!stack.empty()) {
+    current=stack.back();
+    // printMultiindex(current);
+    ret.push_back(current);
+    stack.pop_back();
+    count++;
+    //recursive cases
 
-  //Loop through available reactions, create the next multiindex, and recurse if next has not been previously enumerated
-  for (auto itr = avail.begin(); itr != avail.end(); ++itr) {
-    Multiindex next(current.na, current.ns);
-    for(int i=0; i<next.ns; i++)
-      next.species[i]=current.species[i]+itr->species[i];
-    //we need to populate the next_avail here on the basis of all reactions, not just the previously available ones
-    for(int i=0; i<next.na; i++)
-      next.atoms[i]=current.atoms[i];
-    MultiindexVector next_avail;
-    next_avail.reserve(reactions.size());
+    //Loop through available reactions, create the next multiindex, and recurse if next has not been previously enumerated
+
     for (auto itr = reactions.begin(); itr != reactions.end(); ++itr) {
-      int remove=0;
-      for(int i =0; i < current.ns; i++)
-        if(next.species[i] + itr->species[i] < 0)
-          remove=1;
-      if(remove==0)
-        next_avail.push_back(*itr);
-    }
-    if(previously_enumerated.find(next)==previously_enumerated.end()){
-      if(level+1>maxlevel)
-        maxlevel=level+1;
-      recursive_list(next,next_avail,reactions,previously_enumerated,ret,count,maxlevel,level+1);
+      Multiindex next(current.na, current.ns);
+      for(int i=0; i<next.ns; i++)
+        next.species[i]=current.species[i]+itr->species[i];
+      //we need to populate the next_avail here on the basis of all reactions, not just the previously available ones
+      for(int i=0; i<next.na; i++)
+        next.atoms[i]=current.atoms[i];
+      MultiindexVector next_avail;
+      next_avail.reserve(reactions.size());
+      for (auto itr = reactions.begin(); itr != reactions.end(); ++itr) {
+        int remove=0;
+        Multiindex next(current.na, current.ns);
+        for(int i=0; i<next.ns; i++) {
+          next.species[i]=current.species[i]+itr->species[i];
+          if(next.species[i] < 0){
+            remove=1;
+            break;
+          }
+        }
+        if(remove==0 && previously_enumerated.find(next)==previously_enumerated.end()) {
+          stack.push_back(next);
+          previously_enumerated.insert(next);
+        }
+        // else{
+        //   printf("%i\t %i\t\r", stack.size(), previously_enumerated.size());
+        // }
+        // for(int i =0; i < current.ns; i++)
+        //   if(current.species[i] + itr->species[i] < 0) {
+        //     remove=1;
+        //   }
+        // if(remove==0)
+        //   next_avail.push_back(*itr);
+      }
+      // if(previously_enumerated.find(next)==previously_enumerated.end()){
+      //   if(level+1>maxlevel)
+      //     maxlevel=level+1;
+      //   recursive_list(next,next_avail,reactions,previously_enumerated,ret,count,maxlevel,level+1);
+      // }
     }
   }
 
