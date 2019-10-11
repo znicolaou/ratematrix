@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import os
 import numpy as np
-# import cantera as ct
 import timeit
 import argparse
 import resource
@@ -17,19 +16,19 @@ import glob
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
 parser.add_argument("--filebase", type=str, required=True, dest='filebase', help='Base string for npy file output. Three files will be created for each reaction, storing rates, row indices, and column indices.')
 parser.add_argument("--species", type=int, required=False, default=9, help='Number of species.')
-parser.add_argument("--reactions", type=int, required=False, default=21, help='Number of reactions.')
-parser.add_argument("--molecules", type=int, required=False, default=1, help='Number of molecules.')
+parser.add_argument("--reactions", type=int, required=False, default=10, help='Number of reactions.')
+parser.add_argument("--molecules", type=int, required=False, default=10, help='Number of molecules.')
 parser.add_argument("--seed", type=int, required=False, default=1, help='Random seed.')
 parser.add_argument("--calculate", nargs=2, type=int, required=False, default=[0,-1], help='Rows to calculate in rate matrix. Takes starting index and ending index and save rate matrix corresponding to all reactions over these rows. Default [0 -1].')
-parser.add_argument("--eigenvalues", type=int, required=False, default=50, help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
-# parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 1, 1, 1], help='Reference multiindex for which the temperature and number of atoms are specified. Default 0 4 3 2 8 0.')
-parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
+parser.add_argument("--eigenvalues", type=int, required=False, default=-1, help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
 parser.add_argument("--accumulate", type=int, required=False, default=0, choices=[0,1], help='Flag to accumulate the multiindices from parallel runs.')
 parser.add_argument("--propogate", type=int, required=False, default=0, choices=[0,1], help='Flag to propogate reference multiindex.')
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
 parser.add_argument("--tmax", type=float, required=False, default=1, help='Final integration time for propogating.')
 parser.add_argument("--Nt", type=int, required=False, default=100, help='Number of times to propogate.')
 parser.add_argument("--print", type=int, required=False, default=0, choices=[0,1], help='Print runtimes.')
+parser.add_argument("--reversible", type=int, required=False, default=0, choices=[0,1], help='Include reverse reactions.')
+
 args = parser.parse_args()
 
 #Functions for relating multiindices to matrix indices
@@ -46,17 +45,15 @@ def get_rate (multiindex, stoi, k):
         return 0.
 
 #We can parallelize this by calculating for each row, which should go relatively fast.
-def calculate_sparse_elements_row(rind,i):
-    rstoi=np.zeros(ns)
-    pstoi=np.zeros(ns)
+def calculate_sparse_elements_row(rstoi,pstoi,i):
     data=[]
     rows=[]
     columns=[]
     multiindex=get_multiindex(i)
     multiindex2=multiindex-rstoi+pstoi
     k=1
-    if np.all(multiindex2>=0.) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
-        rate=get_rate(multiindex,rstoi,k)
+    if np.all(multiindex2>=0.):
+        rate=k*np.product(binom(multiindex, rstoi)*factorial(rstoi))
         j=get_index(multiindex2)
         data.append(rate)
         rows.append(i)
@@ -67,12 +64,12 @@ def calculate_sparse_elements_row(rind,i):
     return data,rows,columns
 
 #Main loop over rows to enumerate sparse data
-def calculate_sparse_elements(rind, startrow, endrow):
+def calculate_sparse_elements(rstoi, pstoi, startrow, endrow):
     data=[]
     rows=[]
     columns=[]
     for  i in range(startrow,endrow):
-        rowdata, rowrows, rowcolumns = calculate_sparse_elements_row(rind,i)
+        rowdata, rowrows, rowcolumns = calculate_sparse_elements_row(rstoi, pstoi, i)
         data+=rowdata
         rows+=rowrows
         columns+=rowcolumns
@@ -81,46 +78,47 @@ def calculate_sparse_elements(rind, startrow, endrow):
 #Main
 filebase=args.filebase
 ns=args.species
-nr=args.reactions
+if args.reversible==1:
+    nr=2*args.reactions
+else:
+    nr=args.reactions
 nm=args.molecules
 np.random.seed(args.seed)
 refmultiindex=np.zeros(ns,dtype=int)
-# for i in range(0,len(args.reference),2):
-#     refmultiindex[args.reference[i]]=args.reference[i+1]
-for i in range(0,ns):
-    refmultiindex[i]=args.molecules
-fixed=np.array(args.fix)
+# for i in range(0,ns):
+#     refmultiindex[i]=args.molecules
+for ind in np.random.choice(np.arange(ns),size=args.molecules,replace=True):
+    refmultiindex[ind]+=1
 
 #Calculate the space of possible states
 if args.accumulate==0:
     start=timeit.default_timer()
+    rvecs=np.zeros((nr,ns),dtype=int)
 
     #ensure that the reactions are distinct...
-    rvecs=np.zeros((nr,ns))
-    for i in range(nr):
-        reactants=np.random.choice(np.arange(ns),size=2,replace=False)
-        products=np.random.choice(np.setdiff1d(np.arange(ns),reactants),size=2,replace=False)
-        rvecs[i,reactants]=-1
-        rvecs[i,products]=1
-    # print(rvecs)
-    # multiindices,count,level=rlist.list(atoms-remove_atoms.astype(int), sp_atoms, fixed[::2].astype(int))
-    multiindices=rlist.list(refmultiindex, fixed[::2].astype(int), rvecs.astype(int))
-    # print(refmultiindex)
-    # print(multiindices)
-    # quit()
-    for i in range(0,len(fixed),2):
-        multiindices[:,fixed[i]]=fixed[i+1]
+    if args.reversible==1:
+        for i in range(0,nr,2):
+            reactants=np.random.choice(np.arange(ns),size=2,replace=False)
+            products=np.random.choice(np.setdiff1d(np.arange(ns),reactants),size=2,replace=False)
+            rvecs[i,reactants]=-1
+            rvecs[i,products]=1
+            rvecs[i+1,reactants]=1
+            rvecs[i+1,products]=-1
+    else:
+        for i in range(nr):
+            reactants=np.random.choice(np.arange(ns),size=2,replace=False)
+            products=np.random.choice(np.setdiff1d(np.arange(ns),reactants),size=2,replace=False)
+            rvecs[i,reactants]=-1
+            rvecs[i,products]=1
 
+    multiindices=rlist.list(refmultiindex, rvecs)
     dim=len(multiindices)
-
-    # atot=np.sum(atoms)
     runtime=timeit.default_timer()-start
-
 
     np.save(filebase+"multiindices.npy",multiindices)
     out=open(filebase+"out.dat","w")
 
-    print(dim, runtime, file=out)
+    print(dim, ns, runtime, file=out)
     print(*refmultiindex, file=out)
     out.close()
     if(args.print == 1):
@@ -129,34 +127,11 @@ if args.accumulate==0:
 else:
     if os.path.isfile(filebase+"multiindices.npy"):
         multiindices=np.load(filebase+"multiindices.npy")
-    else:
-        mfiles=sorted(glob.glob('%s*multiindices.npy'%filebase))
-        tfiles=sorted(glob.glob('%s*temperatures.npy'%filebase))
-        pfiles=sorted(glob.glob('%s*pressures.npy'%filebase))
-
-        multiindices=[]
-        temperatures=[]
-        pressures=[]
-        for file in mfiles:
-            multiindices+=np.load(file).tolist()
-        for file in tfiles:
-            temperatures+=np.load(file).tolist()
-        for file in pfiles:
-            pressures+=np.load(file).tolist()
-        multiindices=np.array(multiindices)
-        temperatures=np.array(temperatures)
-        pressures=np.array(pressures)
-        np.save(filebase+"multiindices.npy",multiindices)
-        np.save(filebase+"temperatures.npy",temperatures)
-        np.save(filebase+"pressures.npy",pressures)
 
     file=open(filebase+"out.dat","r")
     instrings=file.readline().split()
-    # atot=int(instrings[0])
     dim=int(instrings[0])
     runtime=float(instrings[1])
-    # count=int(instrings[3])
-    # level=int(instrings[4])
     instrings=file.readline().split()
     refmultiindex=np.array([int(float(i)) for i in instrings])
 
@@ -171,11 +146,16 @@ if endrow>startrow:
     rows=[]
     columns=[]
     for rind in range(nr):
-        reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind, startrow, endrow)
+        rstoi=np.zeros(ns,dtype=int)
+        pstoi=np.zeros(ns,dtype=int)
+        rindices=np.where(rvecs[rind]<0)
+        pindices=np.where(rvecs[rind]>0)
+        rstoi[rindices]=-rvecs[rind,rindices].astype(int)
+        pstoi[pindices]=rvecs[rind,pindices].astype(int)
+        reac_data,reac_rows,reac_columns=calculate_sparse_elements(rstoi, pstoi, startrow, endrow)
         data+=reac_data
         rows+=reac_rows
         columns+=reac_columns
-    np.save(filebase+"spatoms.npy",sp_atoms)
     if not os.path.exists(filebase+"rows"):
         os.mkdir(filebase+"rows")
     if not os.path.exists(filebase+"columns"):
@@ -199,29 +179,30 @@ if args.eigenvalues>0:
     #accumulate rows, data, and columns
     start=timeit.default_timer()
 
-    if os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
-        rows=np.load(args.filebase+"rows.npy")
-        columns=np.load(args.filebase+"columns.npy")
-        data=np.load(args.filebase+"data.npy")
-    else:
-        files=glob.glob(args.filebase+"rows/*.npy")
-        rows=[]
-        for file in files:
-            row=np.load(file).tolist()
-            rows+=row
-        files=glob.glob(args.filebase+"columns/*.npy")
-        columns=[]
-        for file in files:
-            column=np.load(file).tolist()
-            columns+=column
-        files=glob.glob(args.filebase+"data/*.npy")
-        data=[]
-        for file in files:
-            dat=np.load(file).tolist()
-            data+=dat
-        np.save(filebase+"rows.npy",rows)
-        np.save(filebase+"columns.npy",columns)
-        np.save(filebase+"data.npy",data)
+    if args.accumulate==1:
+        if  os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
+            rows=np.load(args.filebase+"rows.npy")
+            columns=np.load(args.filebase+"columns.npy")
+            data=np.load(args.filebase+"data.npy")
+        else:
+            files=glob.glob(args.filebase+"rows/*.npy")
+            rows=[]
+            for file in files:
+                row=np.load(file).tolist()
+                rows+=row
+            files=glob.glob(args.filebase+"columns/*.npy")
+            columns=[]
+            for file in files:
+                column=np.load(file).tolist()
+                columns+=column
+            files=glob.glob(args.filebase+"data/*.npy")
+            data=[]
+            for file in files:
+                dat=np.load(file).tolist()
+                data+=dat
+    np.save(filebase+"rows.npy",rows)
+    np.save(filebase+"columns.npy",columns)
+    np.save(filebase+"data.npy",data)
 
     ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
 

@@ -145,7 +145,12 @@ if args.accumulate==0:
     remove_atoms = np.zeros(len(atoms));
     for i in range(0,len(fixed),2):
         remove_atoms += fixed[i+1]*sp_atoms[fixed[i]]
-    multiindices,count,level=rlist.list(atoms-remove_atoms.astype(int), sp_atoms, fixed[::2].astype(int))
+    frvecs=np.transpose(gas.reactant_stoich_coeffs()-gas.product_stoich_coeffs())
+    rvecs=np.zeros((2*nr,ns),dtype=int)
+    for ind in range(nr):
+        rvecs[2*ind]=frvecs[ind]
+        rvecs[2*ind+1]=-frvecs[ind]
+    multiindices=rlist.list(refmultiindex, rvecs)
 
     for i in range(0,len(fixed),2):
         multiindices[:,fixed[i]]=fixed[i+1]
@@ -199,14 +204,12 @@ if args.accumulate==0:
     np.save(filebase+"pressures.npy",pressures)
     out=open(filebase+"out.dat","w")
 
-    print(atot, dim, runtime, count, level, file=out)
+    print(dim, ns, runtime, file=out)
     print(*refmultiindex, file=out)
     print(*elements, file=out)
     out.close()
     if(args.print == 1):
         print("state space dimension: ", dim)
-        print("state space level: ", level)
-        print("state space calls: ", count)
         print("state space runtime: ", runtime)
 else:
     if os.path.isfile(filebase+"multiindices.npy"):
