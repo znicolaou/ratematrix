@@ -112,6 +112,9 @@ if args.accumulate==0:
             rvecs[i,products]=1
 
     multiindices=rlist.list(refmultiindex, rvecs)
+    sorted=np.argsort(np.sum((ns**np.arange(ns)*multiindices),axis=1))
+    multiindices=multiindices[sorted]
+
     dim=len(multiindices)
     runtime=timeit.default_timer()-start
 
