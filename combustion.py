@@ -31,16 +31,18 @@ def runsim (times):
         sim.rtol_sensitivity = 1.0e-6
         sim.atol_sensitivity = 1.0e-6
 
-    states = ct.SolutionArray(gas, extra=['t','matrices', 'evals', 'evecs', 'sens', 'norm'])
+    states = ct.SolutionArray(gas, extra=['t','matrices', 'matrices2', 'evals', 'evecs', 'sens', 'norm'])
 
     for t in times:
         sim.advance(t)
 
         sensitivities=[]
         data=[]
+        data2=[]
         rows=[]
         columns=[]
         mat=[]
+        mat2=[]
         eigenvalues=[]
         eigenvectors=[]
         norm=0
@@ -64,6 +66,7 @@ def runsim (times):
                         k=gas.forward_rate_constants[rind]
                         if k>0 and np.isfinite(k):
                             data.append(-order/num*k*np.product(concentrations**(rstoi)))
+                            data2.append(-order/num*k)
                             rows.append(n)
                             columns.append(m)
                         rstoi[m]+=1
@@ -75,6 +78,7 @@ def runsim (times):
                         k=gas.reverse_rate_constants[rind]
                         if k>0 and np.isfinite(k):
                             data.append(order/num*k*np.product(concentrations**(pstoi)))
+                            data2.append(order/num*k)
                             rows.append(n)
                             columns.append(m)
                         pstoi[m]+=1
@@ -87,6 +91,7 @@ def runsim (times):
                         k=gas.forward_rate_constants[rind]
                         if k>0 and np.isfinite(k):
                             data.append(order/num*k*np.product(concentrations**(rstoi)))
+                            data2.append(order/num*k)
                             rows.append(n)
                             columns.append(m)
                         rstoi[m]+=1
@@ -98,18 +103,20 @@ def runsim (times):
                         k=gas.reverse_rate_constants[rind]
                         if k>0 and np.isfinite(k):
                             data.append(-order/num*k*np.product(concentrations**(pstoi)))
+                            data2.append(-order/num*k)
                             rows.append(n)
                             columns.append(m)
                         pstoi[m]+=1
 
             mat =coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(gas.n_species),int(gas.n_species))).toarray()
+            mat2 =coo_matrix((np.array(data2),(np.array(rows),np.array(columns))),(int(gas.n_species),int(gas.n_species))).toarray()
             eigenvalues,eigenvectors=np.linalg.eig(mat)
             u, singularvalues, vh = np.linalg.svd(mat)
             norm=(np.sum(np.abs(eigenvalues)**2)/np.sum(np.abs(singularvalues)**2))**(0.5)
             sorted=np.argsort(np.abs(eigenvalues))
             eigenvalues=eigenvalues[sorted]
             eigenvectors=eigenvectors[sorted]
-        states.append(r.thermo.state, t=t, sens=sensitivities, matrices=mat, evals=eigenvalues, evecs=eigenvectors, norm=norm)
+        states.append(r.thermo.state, t=t, sens=sensitivities, matrices=mat,matrices2=mat2, evals=eigenvalues, evecs=eigenvectors, norm=norm)
 
     return states
 
@@ -167,6 +174,8 @@ np.save(args.filebase+"temperatures.npy", observation.T)
 np.save(args.filebase+"pressures.npy", observation.P/ct.one_atm)
 # if quasilinear==1:
 np.save(args.filebase+"matrices.npy", observation.matrices)
+np.save(args.filebase+"matrices2.npy", observation.matrices2)
+print(observation.matrices2[0])
 np.save(args.filebase+"eigenvalues.npy", observation.evals)
 np.save(args.filebase+"eigenvectors.npy", observation.evecs)
 # if sensflag==1:
