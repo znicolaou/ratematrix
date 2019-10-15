@@ -51,7 +51,7 @@ def calculate_sparse_elements_row(rstoi,pstoi,i):
     columns=[]
     multiindex=get_multiindex(i)
     multiindex2=multiindex-rstoi+pstoi
-    k=1
+    k=np.random.exponential(1e12)
     if np.all(multiindex2>=0.):
         rate=k*np.product(binom(multiindex, rstoi)*factorial(rstoi))
         j=get_index(multiindex2)
@@ -178,34 +178,34 @@ if endrow>startrow:
 #Calculate eigenvalues
 if args.eigenvalues==-1:
     args.eigenvalues=dim
+
+if args.accumulate==1:
+    if  os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
+        rows=np.load(args.filebase+"rows.npy")
+        columns=np.load(args.filebase+"columns.npy")
+        data=np.load(args.filebase+"data.npy")
+    else:
+        files=glob.glob(args.filebase+"rows/*.npy")
+        rows=[]
+        for file in files:
+            row=np.load(file).tolist()
+            rows+=row
+        files=glob.glob(args.filebase+"columns/*.npy")
+        columns=[]
+        for file in files:
+            column=np.load(file).tolist()
+            columns+=column
+        files=glob.glob(args.filebase+"data/*.npy")
+        data=[]
+        for file in files:
+            dat=np.load(file).tolist()
+            data+=dat
+np.save(filebase+"rows.npy",rows)
+np.save(filebase+"columns.npy",columns)
+np.save(filebase+"data.npy",data)
 if args.eigenvalues>0:
     #accumulate rows, data, and columns
     start=timeit.default_timer()
-
-    if args.accumulate==1:
-        if  os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
-            rows=np.load(args.filebase+"rows.npy")
-            columns=np.load(args.filebase+"columns.npy")
-            data=np.load(args.filebase+"data.npy")
-        else:
-            files=glob.glob(args.filebase+"rows/*.npy")
-            rows=[]
-            for file in files:
-                row=np.load(file).tolist()
-                rows+=row
-            files=glob.glob(args.filebase+"columns/*.npy")
-            columns=[]
-            for file in files:
-                column=np.load(file).tolist()
-                columns+=column
-            files=glob.glob(args.filebase+"data/*.npy")
-            data=[]
-            for file in files:
-                dat=np.load(file).tolist()
-                data+=dat
-    np.save(filebase+"rows.npy",rows)
-    np.save(filebase+"columns.npy",columns)
-    np.save(filebase+"data.npy",data)
 
     ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
 

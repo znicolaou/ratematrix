@@ -41,6 +41,8 @@ def runsim (times):
         data2=[]
         rows=[]
         columns=[]
+        rows2=[]
+        columns2=[]
         mat=[]
         mat2=[]
         eigenvalues=[]
@@ -57,8 +59,47 @@ def runsim (times):
                 reaction=gas.reactions()[rind]
                 rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
                 pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species])
+
+                rpos=np.where(rstoi>0)
+                nreac=len(rpos)
+                ppos=np.where(pstoi>0)
+                nprod=len(ppos)
+
+                print(ppos)
+                print(rpos)
+                #reactants
+                k=gas.forward_rate_constants[rind]
+                data2.append(-k)
+                rows2.append(rpos[0])
+                rind=np.random.rand(0,len(rpos)-1)+1
+                columns2.append(rpos[rind])
+                data2.append(-k)
+                rows2.append(rpos[rind])
+                columns2.append(rpos[0])
+                remaining=np.setdiff1d(np.arange(nreac),[0])
+                print(remaining)
+                while len(remaining)>1;
+                    rind=np.random.choice(np.setdiff(remaining,[rind]))
+                    data2.append(-k)
+                    rind=np.random.rand(0,len(rpos)-1)+1
+                    rows2.append(rpos[rind])
+                    columns2.append(rpos[0])
+
+                data2.append(-k)
+                rows2.append(rpos[0])
+                columns2.append(ppos[np.random.rand(0,len(rpos)-1)+1])
+
+                #products
+                rands=np.random(low=1,high=nreac,size=nprod)
+                for ind in len(rands):
+                    data2.append(k)
+                    rows2.append(ppos[ind])
+                    columns2.append(rands[ind])
+
+                quit()
                 for n in np.where(rstoi>0)[0]: #row of the matrix, equation for species n
                     #forward reaction with species[n] a reactant
+
                     for m in np.where(rstoi>0)[0]:
                         order=rstoi[m]
                         num=np.sum(rstoi)
@@ -66,7 +107,7 @@ def runsim (times):
                         k=gas.forward_rate_constants[rind]
                         if k>0 and np.isfinite(k):
                             data.append(-order/num*k*np.product(concentrations**(rstoi)))
-                            data2.append(-order/num*k)
+                            data2.append(-k)
                             rows.append(n)
                             columns.append(m)
                         rstoi[m]+=1
