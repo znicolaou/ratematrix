@@ -28,6 +28,7 @@ parser.add_argument("--tmax", type=float, required=False, default=1, help='Final
 parser.add_argument("--Nt", type=int, required=False, default=100, help='Number of times to propogate.')
 parser.add_argument("--print", type=int, required=False, default=0, choices=[0,1], help='Print runtimes.')
 parser.add_argument("--reversible", type=int, required=False, default=0, choices=[0,1], help='Include reverse reactions.')
+parser.add_argument("--scale", type=float, required=False, default=1, help='Exponential constant for rate constant sampling.')
 
 args = parser.parse_args()
 
@@ -45,13 +46,12 @@ def get_rate (multiindex, stoi, k):
         return 0.
 
 #We can parallelize this by calculating for each row, which should go relatively fast.
-def calculate_sparse_elements_row(rstoi,pstoi,i):
+def calculate_sparse_elements_row(rstoi,pstoi,k,i):
     data=[]
     rows=[]
     columns=[]
     multiindex=get_multiindex(i)
     multiindex2=multiindex-rstoi+pstoi
-    k=np.random.exponential(1e12)
     if np.all(multiindex2>=0.):
         rate=k*np.product(binom(multiindex, rstoi)*factorial(rstoi))
         j=get_index(multiindex2)
@@ -64,12 +64,12 @@ def calculate_sparse_elements_row(rstoi,pstoi,i):
     return data,rows,columns
 
 #Main loop over rows to enumerate sparse data
-def calculate_sparse_elements(rstoi, pstoi, startrow, endrow):
+def calculate_sparse_elements(rstoi, pstoi, k, startrow, endrow):
     data=[]
     rows=[]
     columns=[]
     for  i in range(startrow,endrow):
-        rowdata, rowrows, rowcolumns = calculate_sparse_elements_row(rstoi, pstoi, i)
+        rowdata, rowrows, rowcolumns = calculate_sparse_elements_row(rstoi, pstoi, k, i)
         data+=rowdata
         rows+=rowrows
         columns+=rowcolumns
@@ -85,8 +85,7 @@ else:
 nm=args.molecules
 np.random.seed(args.seed)
 refmultiindex=np.zeros(ns,dtype=int)
-# for i in range(0,ns):
-#     refmultiindex[i]=args.molecules
+#initial state occupied randomly
 for ind in np.random.choice(np.arange(ns),size=args.molecules,replace=True):
     refmultiindex[ind]+=1
 
@@ -97,19 +96,23 @@ if args.accumulate==0:
 
     #ensure that the reactions are distinct...
     if args.reversible==1:
+        rates=np.random.exponential(args.scale, size=2*nr)
         for i in range(0,nr,2):
             reactants=np.random.choice(np.arange(ns),size=2,replace=False)
             products=np.random.choice(np.setdiff1d(np.arange(ns),reactants),size=2,replace=False)
+
             rvecs[i,reactants]=-1
             rvecs[i,products]=1
             rvecs[i+1,reactants]=1
             rvecs[i+1,products]=-1
     else:
+        rates=np.random.exponential(args.scale, size=nr)
         for i in range(nr):
             reactants=np.random.choice(np.arange(ns),size=2,replace=False)
             products=np.random.choice(np.setdiff1d(np.arange(ns),reactants),size=2,replace=False)
             rvecs[i,reactants]=-1
             rvecs[i,products]=1
+    print(rates)
 
     multiindices=rlist.list(refmultiindex, rvecs)
     sorted=np.argsort(np.sum((ns**np.arange(ns)*multiindices),axis=1))
@@ -155,7 +158,7 @@ if endrow>startrow:
         pindices=np.where(rvecs[rind]>0)
         rstoi[rindices]=-rvecs[rind,rindices].astype(int)
         pstoi[pindices]=rvecs[rind,pindices].astype(int)
-        reac_data,reac_rows,reac_columns=calculate_sparse_elements(rstoi, pstoi, startrow, endrow)
+        reac_data,reac_rows,reac_columns=calculate_sparse_elements(rstoi, pstoi, rates[rind], startrow, endrow)
         data+=reac_data
         rows+=reac_rows
         columns+=reac_columns

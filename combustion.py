@@ -31,7 +31,7 @@ def runsim (times):
         sim.rtol_sensitivity = 1.0e-6
         sim.atol_sensitivity = 1.0e-6
 
-    states = ct.SolutionArray(gas, extra=['t','matrices', 'matrices2', 'evals', 'evecs', 'sens', 'norm'])
+    states = ct.SolutionArray(gas, extra=['t','matrices', 'evals', 'evecs', 'matrices2', 'evals2', 'evecs2', 'sens'])
 
     for t in times:
         sim.advance(t)
@@ -60,43 +60,40 @@ def runsim (times):
                 rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
                 pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species])
 
-                rpos=np.where(rstoi>0)
-                nreac=len(rpos)
-                ppos=np.where(pstoi>0)
-                nprod=len(ppos)
+                # rpos=np.where(rstoi>0)
+                # nreac=len(rpos)
+                # ppos=np.where(pstoi>0)
+                # nprod=len(ppos)
+                #
+                # #reactants
+                # k=gas.forward_rate_constants[rind]
+                # data2.append(-k)
+                # rows2.append(rpos[0])
+                # rind=np.random.rand(0,len(rpos)-1)+1
+                # columns2.append(rpos[rind])
+                # data2.append(-k)
+                # rows2.append(rpos[rind])
+                # columns2.append(rpos[0])
+                # remaining=np.setdiff1d(np.arange(nreac),[0])
+                # print(remaining)
+                # while len(remaining)>1;
+                #     rind=np.random.choice(np.setdiff(remaining,[rind]))
+                #     data2.append(-k)
+                #     rind=np.random.rand(0,len(rpos)-1)+1
+                #     rows2.append(rpos[rind])
+                #     columns2.append(rpos[0])
+                #
+                # data2.append(-k)
+                # rows2.append(rpos[0])
+                # columns2.append(ppos[np.random.rand(0,len(rpos)-1)+1])
+                #
+                # #products
+                # rands=np.random(low=1,high=nreac,size=nprod)
+                # for ind in len(rands):
+                #     data2.append(k)
+                #     rows2.append(ppos[ind])
+                #     columns2.append(rands[ind])
 
-                print(ppos)
-                print(rpos)
-                #reactants
-                k=gas.forward_rate_constants[rind]
-                data2.append(-k)
-                rows2.append(rpos[0])
-                rind=np.random.rand(0,len(rpos)-1)+1
-                columns2.append(rpos[rind])
-                data2.append(-k)
-                rows2.append(rpos[rind])
-                columns2.append(rpos[0])
-                remaining=np.setdiff1d(np.arange(nreac),[0])
-                print(remaining)
-                while len(remaining)>1;
-                    rind=np.random.choice(np.setdiff(remaining,[rind]))
-                    data2.append(-k)
-                    rind=np.random.rand(0,len(rpos)-1)+1
-                    rows2.append(rpos[rind])
-                    columns2.append(rpos[0])
-
-                data2.append(-k)
-                rows2.append(rpos[0])
-                columns2.append(ppos[np.random.rand(0,len(rpos)-1)+1])
-
-                #products
-                rands=np.random(low=1,high=nreac,size=nprod)
-                for ind in len(rands):
-                    data2.append(k)
-                    rows2.append(ppos[ind])
-                    columns2.append(rands[ind])
-
-                quit()
                 for n in np.where(rstoi>0)[0]: #row of the matrix, equation for species n
                     #forward reaction with species[n] a reactant
 
@@ -107,7 +104,7 @@ def runsim (times):
                         k=gas.forward_rate_constants[rind]
                         if k>0 and np.isfinite(k):
                             data.append(-order/num*k*np.product(concentrations**(rstoi)))
-                            data2.append(-k)
+                            data2.append(-order/num*k)
                             rows.append(n)
                             columns.append(m)
                         rstoi[m]+=1
@@ -152,12 +149,14 @@ def runsim (times):
             mat =coo_matrix((np.array(data),(np.array(rows),np.array(columns))),(int(gas.n_species),int(gas.n_species))).toarray()
             mat2 =coo_matrix((np.array(data2),(np.array(rows),np.array(columns))),(int(gas.n_species),int(gas.n_species))).toarray()
             eigenvalues,eigenvectors=np.linalg.eig(mat)
-            u, singularvalues, vh = np.linalg.svd(mat)
-            norm=(np.sum(np.abs(eigenvalues)**2)/np.sum(np.abs(singularvalues)**2))**(0.5)
+            eigenvalues2,eigenvectors2=np.linalg.eig(mat2)
             sorted=np.argsort(np.abs(eigenvalues))
             eigenvalues=eigenvalues[sorted]
             eigenvectors=eigenvectors[sorted]
-        states.append(r.thermo.state, t=t, sens=sensitivities, matrices=mat,matrices2=mat2, evals=eigenvalues, evecs=eigenvectors, norm=norm)
+            sorted2=np.argsort(np.abs(eigenvalues2))
+            eigenvalues2=eigenvalues[sorted2]
+            eigenvectors2=eigenvectors[sorted2]
+        states.append(r.thermo.state, t=t, sens=sensitivities, matrices=mat, evals=eigenvalues, evecs=eigenvectors, matrices2=mat2, evals2=eigenvalues2, evecs2=eigenvectors2)
 
     return states
 
@@ -216,12 +215,12 @@ np.save(args.filebase+"pressures.npy", observation.P/ct.one_atm)
 # if quasilinear==1:
 np.save(args.filebase+"matrices.npy", observation.matrices)
 np.save(args.filebase+"matrices2.npy", observation.matrices2)
-print(observation.matrices2[0])
 np.save(args.filebase+"eigenvalues.npy", observation.evals)
 np.save(args.filebase+"eigenvectors.npy", observation.evecs)
+np.save(args.filebase+"eigenvalues2.npy", observation.evals2)
+np.save(args.filebase+"eigenvectors2.npy", observation.evecs2)
 # if sensflag==1:
 np.save(args.filebase+"sensitivities.npy", observation.sens)
-np.save(args.filebase+"norms.npy", observation.norm)
 
 stop=timeit.default_timer()
 print ('runtime: %f'%(stop-start))
