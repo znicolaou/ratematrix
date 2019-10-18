@@ -370,16 +370,11 @@ if args.propogate == 1:
 
     def func(t,y):
         return ratematrix.dot(y)
-    #
-    # jacarray=ratematrix.toarray()
-    # def jac(t, y):
-    #     return jacarray
 
     y0=np.zeros(dim)
     y0[get_index(refmultiindex)]=1.0
     times=[args.t0*(args.tmax/args.t0)**(n*1.0/args.Nt) for n in range(args.Nt)]
     sol=solve_ivp(func,[0,args.tmax], y0, method='BDF', t_eval=times, atol=1e-8, rtol=1e-6, first_step=args.t0/100, jac=ratematrix)
-    # sol=solve_ivp(func,[0,args.tmax], y0, method='LSODA', t_eval=times, atol=1e-8, rtol=1e-6, first_step=args.t0/100, jac=jac)
     vals=np.transpose(np.array(sol.y)).tolist()
 
     np.save(filebase+"times.npy",np.array(times))
