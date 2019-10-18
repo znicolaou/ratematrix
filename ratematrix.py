@@ -240,11 +240,7 @@ else:
 
     file=open(filebase+"out.dat","r")
     instrings=file.readline().split()
-    atot=int(instrings[0])
-    dim=int(instrings[1])
-    runtime=float(instrings[2])
-    count=int(instrings[3])
-    level=int(instrings[4])
+    dim=int(instrings[0])
     instrings=file.readline().split()
     refmultiindex=np.array([int(float(i)) for i in instrings])
 
