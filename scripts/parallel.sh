@@ -37,11 +37,10 @@ for i in `seq 0 $((4*num))`; do
 done
 
 
-dim=`awk 'BEGIN{n=0}{if(n%3==0){dim+=$2;} n++;}END{print dim}' ${filebase0}pout.dat`
+dim=`awk 'BEGIN{n=0}{if(n%3==0){dim+=$1;} n++;}END{print dim}' ${filebase0}pout.dat`
+ns=`awk 'BEGIN{n=0}{if(n%3==0){dim=$2;} n++;}END{print dim}' ${filebase0}pout.dat`
 cputime=`awk 'BEGIN{n=0}{if(n%3==0){count+=$3}n++;}END{print count}' ${filebase0}pout.dat`
-count=`awk 'BEGIN{n=0}{if(n%3==0){count+=$4}n++;}END{print count}' ${filebase0}pout.dat`
-level=`awk 'BEGIN{n=0}{if(n%3==0){if($5>max){max=$5}}n++;}END{print max}' ${filebase0}pout.dat`
-echo "$((6*num)) $dim $cputime $count $level" >> ${filebase0}temp/out.dat
+echo "$dim $ns $cputime >> ${filebase0}temp/out.dat
 tail -n 2 ${filebase0}pout.dat >> ${filebase0}temp/out.dat
 
 rm ${filebase0}pout.dat
