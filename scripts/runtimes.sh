@@ -1,9 +1,5 @@
 #!/bin/bash
-Natoms0=3
-Natoms1=9
-filebase=data/runtimes
-for i in `seq $Natoms0 $Natoms1`; do
-  echo $i
-  echo "./ratematrix.py --atoms $i $i $i --filebase $filebase --plot 0 --calculate 0 "
-  ./ratematrix.py --atoms $i $i $i --filebase $filebase --plot 0 --calculate 0
-done
+for i in {3..6}; do head -n 1 data/h2o2/$i/out.dat | awk -v num=$i '{print(num, $1, $3)}'; done > statesruntime.dat
+for i in {3..6}; do head -n 1 data/h2o2/$i/cout.dat | awk -v num=$i '{print(num, $1, $2)}'; done > calculateruntime.dat
+for i in {3..6}; do head -n 1 data/h2o2/$i/eout.dat | awk -v num=$i '{print(num, $1, $2)}'; done > eigenvaluesruntime.dat
+for i in {3..6}; do head -n 1 data/h2o2/$i/rout.dat | awk -v num=$i '{print(num, $1, $2)}'; done > propogateruntime.dat

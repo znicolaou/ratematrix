@@ -3,7 +3,7 @@
 threads=32 #number of jobs to run concurrently
 mem=150
 
-for num in `seq 3 8`; do
+for num in `seq 3 10`; do
 mkdir -p data/h2o2
 
 echo $num
@@ -51,15 +51,15 @@ rm ${filebase0}cout_*.dat
 echo "calculate cputime: $cputime"
 echo "calculate runtime: $runtime"
 
-evals=`bc <<< "$num*10"`
-evals=-1
+evals=$((150*num))
 
 sleep 5
-./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate 0 0 --accumulate 1 --eigenvalues $evals --propogate 1 --adiabatic $adiabatic --temperature $temperature --print 0
+# ./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate 0 0 --accumulate 1 --eigenvalues $evals --propogate 1 --adiabatic $adiabatic --temperature $temperature --print 0
+./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate 0 0 --accumulate 1 --eigenvalues $evals --propogate 0 --adiabatic $adiabatic --temperature $temperature --print 0
 runtime=`head -n 1 ${filebase0}eout.dat | awk '{print $1}'`
 echo "eigenvalues runtime: $runtime"
-runtime=`head -n 1 ${filebase0}rout.dat | awk '{print $1}'`
-echo "propogate runtime: $runtime"
+# runtime=`head -n 1 ${filebase0}rout.dat | awk '{print $1}'`
+# echo "propogate runtime: $runtime"
 
 rm -r ${filebase0}rows
 rm -r ${filebase0}columns

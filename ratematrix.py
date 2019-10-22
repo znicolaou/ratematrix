@@ -26,6 +26,7 @@ parser.add_argument("--pressure", type=float, required=False, default=1, help='P
 parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
 parser.add_argument("--accumulate", type=int, required=False, default=0, choices=[0,1], help='Flag to accumulate the multiindices from parallel runs.')
 parser.add_argument("--propogate", type=int, required=False, default=0, choices=[0,1], help='Flag to propogate reference multiindex.')
+parser.add_argument("--tau", type=float, required=False, default=1e-5, help='Time scale for shift invert.')
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
 parser.add_argument("--tmax", type=float, required=False, default=1, help='Final integration time for propogating.')
 parser.add_argument("--Nt", type=int, required=False, default=100, help='Number of times to propogate.')
@@ -319,7 +320,9 @@ if args.eigenvalues>0:
     ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
 
     if args.eigenvalues < ratematrix.shape[0]:
-        eigenvalues,eigenvectors=eigs(ratematrix, args.eigenvalues, sigma=-1e-1, which='LM')
+        v0=np.zeros(dim)
+        v0[get_index(refmultiindex)]=1
+        eigenvalues,eigenvectors=eigs(ratematrix, args.eigenvalues, sigma=-1/args.tau, which='LM',v0=v0)
         # svals=svds(ratematrix, args.eigenvalues, which='SM', return_singular_vectors=False)
         svals=np.array(dim)
     else:
