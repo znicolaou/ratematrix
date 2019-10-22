@@ -278,8 +278,8 @@ if endrow>startrow:
     np.save(filebase+"columns/%i_%i.npy"%(startrow,endrow),columns)
     np.save(filebase+"data/%i_%i.npy"%(startrow,endrow),data)
     runtime=timeit.default_timer()-start
-    out=open(filebase+"_%icout.dat"%(start),"w")
-    print("sparsity ", len(rows)/(dim*dim), runtime, file=out)
+    out=open(filebase+"cout_%i_%i.dat"%(startrow,endrow),"w")
+    print(runtime, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
     out.close()
     if(args.print == 1):
         print("calculate runtime:", runtime)
@@ -332,9 +332,7 @@ if args.eigenvalues>0:
 
     runtime=timeit.default_timer()-start
     out=open(filebase+"eout.dat","w")
-    print(runtime, file=out)
-    print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
-    print(dim, file=out)
+    print(runtime, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out, end=' ')
     out.close()
     if(args.print == 1):
         print("eigenvalues runtime:", runtime)
@@ -382,9 +380,7 @@ if args.propogate == 1:
 
     runtime=timeit.default_timer()-start
     out=open(filebase+"rout.dat","w")
-    print(runtime, file=out)
-    print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
-    print(dim, file=out)
+    print(runtime, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
     out.close()
     if(args.print == 1):
         print("propogate success:", sol.success)

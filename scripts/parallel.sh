@@ -3,7 +3,7 @@
 threads=32 #number of jobs to run concurrently
 mem=150
 
-for num in `seq 3 3`; do
+for num in `seq 3 8`; do
 mkdir -p data/h2o2
 
 echo $num
@@ -40,12 +40,14 @@ done
 done
 wait
 
-cat ${filebase0}_*cout.dat >> ${filebase0}cout.dat
-rm ${filebase0}_*cout.dat
 
-cputime=`awk '{t+=$3}END{print(t)}' ${filebase0}cout.dat`
+cputime=`awk '{t+=$1}END{print(t)}' ${filebase0}cout_*.dat`
 end=`date +%s%N`
 runtime=`bc -l <<< "($end-$starttime)*0.000000001"`
+echo $runtime $cputime > ${filebase0}cout.dat
+cat ${filebase0}cout_*.dat >> ${filebase0}cout.dat
+rm ${filebase0}cout_*.dat
+
 echo "calculate cputime: $cputime"
 echo "calculate runtime: $runtime"
 
