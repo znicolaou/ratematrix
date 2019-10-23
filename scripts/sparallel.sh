@@ -8,7 +8,12 @@
 threads=1000
 mem=150
 
-for num in `seq 10 25`; do
+#!/bin/bash
+
+threads=32 #number of jobs to run concurrently
+mem=150
+
+for num in `seq 3 10`; do
 mkdir -p data/h2o2
 
 echo $num
@@ -17,49 +22,14 @@ adiabatic=1
 temperature=1000
 AR=$((20*num))
 H2=$((2*num))
-mkdir -p ${filebase0}temp
+mkdir -p ${filebase0}
 
 #Calculate state space
 start=`date +%s%N`
-for i in `seq 0 $((4*num))`; do
-  for j in `seq 0 $((2*num))`; do
-    js=`jobs | wc -l`
-    while [ $js -ge $threads ]; do
-      sleep 0.01
-      js=`jobs | wc -l`
-    done
-    srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0}temp/${i}_${j} --reference 0 $H2 3 $num 4 1 8 $AR --fix 1 $i 2 $j 8 $AR --calculate 0 0 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature  &
-  done
-done
+srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate 0 0 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature --print 0
 end=`date +%s%N`
-wait
-
-for i in `seq 0 $((4*num))`; do
-  for j in `seq 0 $((2*num))`; do
-    cat ${filebase0}temp/${i}_${j}out.dat >> ${filebase0}pout.dat
-    rm ${filebase0}temp/${i}_${j}out.dat
-  done
-done
-
-
-dim=`awk 'BEGIN{n=0}{if(n%3==0){dim+=$2;} n++;}END{print dim}' ${filebase0}pout.dat`
-cputime=`awk 'BEGIN{n=0}{if(n%3==0){count+=$3}n++;}END{print count}' ${filebase0}pout.dat`
-count=`awk 'BEGIN{n=0}{if(n%3==0){count+=$4}n++;}END{print count}' ${filebase0}pout.dat`
-level=`awk 'BEGIN{n=0}{if(n%3==0){if($5>max){max=$5}}n++;}END{print max}' ${filebase0}pout.dat`
-echo "$((6*num)) $dim $cputime $count $level" >> ${filebase0}temp/out.dat
-tail -n 2 ${filebase0}pout.dat >> ${filebase0}temp/out.dat
-
-rm ${filebase0}pout.dat
-
-srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0}temp/ --reference 0 $H2 3 $num 4 1 8 $AR --calculate 0 0 --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature
-
-mv ${filebase0}temp/out.dat $filebase0
-mv ${filebase0}temp/multiindices.npy $filebase0
-mv ${filebase0}temp/temperatures.npy $filebase0
-mv ${filebase0}temp/pressures.npy $filebase0
-rm -r ${filebase0}temp/
-
-end=`date +%s%N`
+dim=`head -n 1 ${filebase0}out.dat | awk '{print $1}'`
+cputime=`head -n 1 ${filebase0}out.dat | awk '{print $3}'`
 runtime=`bc -l <<< "($end-$start)*0.000000001"`
 echo "state space dimension: $dim"
 echo "state space cputime: $cputime"
@@ -68,7 +38,7 @@ echo "state space runtime: $runtime"
 #Calculate matrix entries
 starttime=`date +%s%N`
 
-dim=`head -n 1 ${filebase0}out.dat | awk '{print $2}'`
+dim=`head -n 1 ${filebase0}out.dat | awk '{print $1}'`
 
 for start in `seq 0 100 $((dim+100))`; do
 js=`jobs | wc -l`
@@ -76,25 +46,30 @@ while [ $js -ge $threads ]; do
   sleep 1
   js=`jobs | wc -l`
 done
-srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate $start $((start+100)) --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature &
+srun -Q --exclusive -n1 -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate $start $((start+100)) --accumulate 1 --eigenvalues 0 --adiabatic $adiabatic --temperature $temperature --print 0 &
 done
 wait
 
-cat ${filebase0}_*cout.dat >> ${filebase0}cout.dat
-rm ${filebase0}_*cout.dat
 
-cputime=`awk '{t+=$3}END{print(t)}' ${filebase0}cout.dat`
+cputime=`awk '{t+=$1}END{print(t)}' ${filebase0}cout_*.dat`
 end=`date +%s%N`
 runtime=`bc -l <<< "($end-$starttime)*0.000000001"`
+echo $runtime $cputime > ${filebase0}cout.dat
+cat ${filebase0}cout_*.dat >> ${filebase0}cout.dat
+rm ${filebase0}cout_*.dat
+
 echo "calculate cputime: $cputime"
 echo "calculate runtime: $runtime"
 
-evals=`bc <<< "$num*10"`
+evals=$((150*num))
 
 sleep 5
-srun -N1 -n1 -Q ./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate 0 0 --accumulate 1 --eigenvalues $evals --propogate 1 --adiabatic $adiabatic --temperature $temperature
-runtime=`awk '{print $1}' ${filebase0}rout.dat`
-echo "propogate runtime: $runtime"
+# ./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate 0 0 --accumulate 1 --eigenvalues $evals --propogate 1 --adiabatic $adiabatic --temperature $temperature --print 0
+srun -Q --exclusive -N1 --mem=$mem ./ratematrix.py --filebase ${filebase0} --reference 0 $H2 3 $num 4 1 8 $AR --calculate 0 0 --accumulate 1 --eigenvalues $evals --propogate 0 --adiabatic $adiabatic --temperature $temperature --print 0
+runtime=`head -n 1 ${filebase0}eout.dat | awk '{print $1}'`
+echo "eigenvalues runtime: $runtime"
+# runtime=`head -n 1 ${filebase0}rout.dat | awk '{print $1}'`
+# echo "propogate runtime: $runtime"
 
 rm -r ${filebase0}rows
 rm -r ${filebase0}columns
