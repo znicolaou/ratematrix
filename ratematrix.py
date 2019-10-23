@@ -37,13 +37,16 @@ args = parser.parse_args()
 def get_multiindex(index):
     return multiindices[index]
 def get_index(multiindex):
-    return np.where(np.all(multiindices==multiindex,axis=1))[0][0]
+    temp=np.where(np.all(multiindices==multiindex,axis=1))[0]
+    if(len(temp)>0):
+        return temp[0]
+    else:
+        return -1;
 
 def get_rate (multiindex, stoi, k, vol):
 
     if np.all(multiindex>=stoi):
         return k*np.product(binom(multiindex, stoi)*factorial(stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
-        # return k*np.product(factorial(multiindex)/factorial(multiindex-stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
     else:
         return 0.
 
@@ -66,9 +69,9 @@ def calculate_sparse_elements_row(rind,i):
     #forward reaction
     k=gas.forward_rate_constants[rind]
     multiindex2=multiindex-rstoi+pstoi
-    if np.all(multiindex2>=0.) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
+    j=get_index(multiindex2)
+    if np.all(multiindex2>=0.) and not np.isnan(k) and j>=0:
         rate=get_rate(multiindex,rstoi,k,refvol)
-        j=get_index(multiindex2)
         data.append(rate)
         rows.append(i)
         columns.append(j)
@@ -78,9 +81,9 @@ def calculate_sparse_elements_row(rind,i):
     #reverse reaction
     k=gas.reverse_rate_constants[rind]
     multiindex2=multiindex+rstoi-pstoi
-    if np.all(multiindex2>=0) and not np.isnan(k) and (np.any([np.all(multiindex2==multiindex) for multiindex in multiindices])):
+    j=get_index(multiindex2)
+    if np.all(multiindex2>=0) and not np.isnan(k):
         rate=get_rate(multiindex,pstoi,k,refvol)
-        j=get_index(multiindex2)
         data.append(rate)
         rows.append(i)
         columns.append(j)
