@@ -146,21 +146,33 @@ if args.accumulate==0:
         last_avail[0].append(i)
         last_avail[1].append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
 
-    remove_atoms = np.zeros(len(atoms));
-    for i in range(0,len(fixed),2):
-        remove_atoms += fixed[i+1]*sp_atoms[fixed[i]]
-    frvecs=np.transpose(gas.reactant_stoich_coeffs()-gas.product_stoich_coeffs())
-    rvecs=np.zeros((2*nr,ns),dtype=int)
-    for ind in range(nr):
+
+    frvecs=np.unique(np.transpose(gas.reactant_stoich_coeffs()-gas.product_stoich_coeffs()),axis=0)
+
+    if len(fixed)==2:
+        while refmultiindex[fixed[0]] != fixed[1]:
+            #make a list of available reactions
+            avail=[]
+            for i in range(len(frvecs)):
+                if np.all(refmultiindex+frvecs[i]>=0) and np.abs(refmultiindex[fixed[0]] + frvecs[i,fixed[0]] - fixed[1])<np.abs(refmultiindex[fixed[0]] - fixed[1]) :
+                    avail.append(frvecs[i])
+                if np.all(refmultiindex-frvecs[i]>=0) and np.abs(refmultiindex[fixed[0]] - frvecs[i,fixed[0]] - fixed[1])<np.abs(refmultiindex[fixed[0]] - fixed[1]) :
+                    avail.append(-frvecs[i])
+            if(len(avail)==0):
+                print("Could not fix!")
+                quit()
+            refmultiindex = (refmultiindex+avail[np.random.randint(len(avail))]).astype(int)
+        # frvecs=frvecs[np.where(frvecs[:,fixed[0]]==0)[0]]
+
+    rvecs=np.zeros((2*len(frvecs),ns),dtype=int)
+    for ind in range(len(frvecs)):
         rvecs[2*ind]=frvecs[ind]
         rvecs[2*ind+1]=-frvecs[ind]
+
     multiindices=rlist.list(refmultiindex, rvecs)
     sorted=np.argsort(np.sum((ns**np.arange(ns)*multiindices),axis=1))
     multiindices=multiindices[sorted]
 
-
-    for i in range(0,len(fixed),2):
-        multiindices[:,fixed[i]]=fixed[i+1]
 
     accessible=[]
     temperatures=[]
