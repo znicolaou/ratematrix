@@ -5,10 +5,10 @@ press0=0.01
 press1=10.0
 temp0=400
 temp1=1000
-filebase0=data/sweep
+filebase0=data/sweep2
 procs=32
 
-num=3
+num=5
 adiabatic=1
 AR=$((20*num))
 H2=$((2*num))
