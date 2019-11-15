@@ -7,6 +7,7 @@ import argparse
 import resource
 from scipy.sparse import coo_matrix, save_npz, load_npz
 from scipy.sparse.linalg import eigs, svds
+from scipy.linalg import eig
 from scipy.special import factorial, binom
 from scipy.integrate import ode, solve_ivp
 import sys
@@ -341,8 +342,11 @@ if args.eigenvalues>0:
         # svals=svds(ratematrix, args.eigenvalues, which='SM', return_singular_vectors=False)
         svals=np.array(dim)
     else:
-        eigenvalues,eigenvectors=np.linalg.eig(ratematrix.toarray())
-        svals=np.linalg.svd(ratematrix.toarray(),compute_uv=False)
+        # eigenvalues,eigenvectors=np.linalg.eig(ratematrix.toarray())
+        eigenvalues,eigenvectors=eig(ratematrix.toarray())
+        # svals=np.linalg.svd(ratematrix.toarray(),compute_uv=False)
+        svals=np.array(dim)
+
     sorted=np.argsort(eigenvalues)
     np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
     np.save(filebase+"singularvalues.npy",svals)
