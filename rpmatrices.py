@@ -6,7 +6,7 @@ import cantera as ct
 import timeit
 import argparse
 from scipy.sparse import coo_matrix
-import progressbar
+# import progressbar
 
 
 
@@ -113,11 +113,11 @@ for rind in range(nr):
         reversible+=1
 print(ns,"species",nr,"reactions,",reversible,"of which are reversible.")
 
-pbar=progressbar.ProgressBar(widgets=['Reactions: ', progressbar.Percentage(), progressbar.Bar(), ' ', progressbar.ETA()], maxval=nr)
-pbar.start()
+# pbar=progressbar.ProgressBar(widgets=['Reactions: ', progressbar.Percentage(), progressbar.Bar(), ' ', progressbar.ETA()], maxval=nr)
+# pbar.start()
 #Find list of reactions that must be removed for constraints
 for rind in range(nr):
-    pbar.update(t)
+    # pbar.update(nr)
     reaction=gas.reactions()[rind]
     rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species],dtype=int)
     pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species],dtype=int)

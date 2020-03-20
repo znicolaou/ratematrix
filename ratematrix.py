@@ -72,6 +72,7 @@ def calculate_sparse_elements_row(rind,i):
     multiindex2=multiindex-rstoi+pstoi
     j=get_index(multiindex2)
     if np.all(multiindex2>=0.) and not np.isnan(k) and j>=0:
+    # if np.all(multiindex2>=0.) and k>0 and j>=0:
         rate=get_rate(multiindex,rstoi,k,refvol)
         data.append(rate)
         rows.append(i)
@@ -83,6 +84,7 @@ def calculate_sparse_elements_row(rind,i):
     k=gas.reverse_rate_constants[rind]
     multiindex2=multiindex+rstoi-pstoi
     j=get_index(multiindex2)
+    # if np.all(multiindex2>=0) and k>0 and j>=0:
     if np.all(multiindex2>=0) and not np.isnan(k) and j>=0:
         rate=get_rate(multiindex,pstoi,k,refvol)
         data.append(rate)
@@ -186,7 +188,7 @@ if args.accumulate==0:
             try:
                 gas.UVX=refenergy/refmass,refvol/refmass,multiindex
                 quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-                if(quant.T > 100): #far outside the range where these constants are valid...
+                if(quant.T > 200): #far outside the range where these constants are valid...
                     temperatures.append(quant.T)
                     pressures.append(quant.P/ct.one_atm)
                     accessible.append(multiindex)

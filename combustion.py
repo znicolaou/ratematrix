@@ -62,7 +62,6 @@ def runsim (times):
 
                 for n in np.where(rstoi>0)[0]: #row of the matrix, equation for species n
                     #forward reaction with species[n] a reactant
-
                     for m in np.where(rstoi>0)[0]:
                         order=rstoi[m]
                         num=np.sum(rstoi)
