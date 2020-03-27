@@ -18,20 +18,21 @@ import glob
 parser = argparse.ArgumentParser(description='Generate a sparse rate matrix from cantera model.')
 parser.add_argument("--filebase", type=str, required=True, dest='filebase', help='Base string for npy file output. Three files will be created for each reaction, storing rates, row indices, and column indices.')
 parser.add_argument("--mechanism", type=str, required=False, default='mechanisms/h2o2.cti', dest='mechanism', help='Mechanism cti file. Default mechanisms/h2o2.cti.')
-parser.add_argument("--calculate", nargs=2, type=int, required=False, default=[0,-1], help='Rows to calculate in rate matrix. Takes starting index and ending index and save rate matrix corresponding to all reactions over these rows. Default [0 -1].')
-parser.add_argument("--eigenvalues", type=int, required=False, default=-1, help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
 parser.add_argument("--temperature", type=float, required=False, default=1000, help='Temperature in Kelvin. Default 1000.')
 parser.add_argument("--adiabatic", type=int, choices=[0, 1, 2], required=False, default=1, help='Convert energy from reactions to heat. The values 0, 1, and 2 correspond to constant volume/temperature, constant volume/energy, and constant pressure/enthalpy, respectively. The temperature is specify the reference multiindix specified with --reference. ')
-parser.add_argument("--reference", type=int, nargs='+', required=False, default=[0, 4, 3, 2, 8, 0], help='Reference multiindex for which the temperature and number of atoms are specified. Default 0 4 3 2 8 0.')
+parser.add_argument("--refspecies", type=str, nargs='+', required=False, default=['H2', 'O2', 'OH', 'AR'], help="Reference multiindex for which the temperature and number of atoms are specified. Default ['H2', 'O2', 'OH', 'AR'].")
+parser.add_argument("--refcounts", type=int, nargs='+', required=False, default=[8, 4, 1, 80], help='Reference multiindex for which the temperature and number of atoms are specified. Default [8, 4, 1, 80].')
+
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
-parser.add_argument("--fix", nargs='+', type=int, required=False, default=[], help='Fix species numbers for parallelization. Include each species index followed by the number of molecules to fix.')
-parser.add_argument("--accumulate", type=int, required=False, default=0, choices=[0,1], help='Flag to accumulate the multiindices from parallel runs.')
+parser.add_argument("--calculate", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate  rate matrix. Default 1.')
+parser.add_argument("--eigenvalues", type=int, required=False, default=-1, help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
 parser.add_argument("--propogate", type=int, required=False, default=0, choices=[0,1], help='Flag to propogate reference multiindex.')
+parser.add_argument("--thrs", type=float, required=False, default=1e-2, help='Threshold for including reactions.')
 parser.add_argument("--tau", type=float, required=False, default=1e-5, help='Time scale for shift invert.')
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
-parser.add_argument("--tmax", type=float, required=False, default=1, help='Final integration time for propogating.')
-parser.add_argument("--Nt", type=int, required=False, default=100, help='Number of times to propogate.')
-parser.add_argument("--print", type=int, required=False, default=0, choices=[0,1], help='Print runtimes.')
+parser.add_argument("--tmax", type=float, required=False, default=1e2, help='Final integration time for propogating.')
+parser.add_argument("--Nt", type=int, required=False, default=101, help='Number of times to propogate.')
+parser.add_argument("--print", type=int, required=False, default=1, choices=[0,1], help='Print runtimes.')
 args = parser.parse_args()
 
 #Functions for relating multiindices to matrix indices
@@ -45,54 +46,37 @@ def get_index(multiindex):
         return -1;
 
 def get_rate (multiindex, stoi, k, vol):
-
     if np.all(multiindex>=stoi):
         return k*np.product(binom(multiindex, stoi)*factorial(stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
     else:
         return 0.
 
-#We can parallelize this by calculating for each row, which should go relatively fast.
+#Given that we already changed the gas to each state, we should have saved the rate constants and reused them here
 def calculate_sparse_elements_row(rind,i):
-    reaction=gas.reactions()[rind]
-    rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species])
-    pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species])
     data=[]
     rows=[]
     columns=[]
     multiindex=get_multiindex(i)
-    if(args.adiabatic == 1):
-        gas.UVX=refenergy/refmass,refvol/refmass,multiindex
-    elif(args.adiabatic == 2):
-        gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
-    else:
-        gas.TPX=args.temperature,args.pressure*ct.one_atm,multiindex
-
     #forward reaction
-    k=gas.forward_rate_constants[rind]
-    multiindex2=multiindex-rstoi+pstoi
-    j=get_index(multiindex2)
-    if np.all(multiindex2>=0.) and not np.isnan(k) and j>=0:
-    # if np.all(multiindex2>=0.) and k>0 and j>=0:
-        rate=get_rate(multiindex,rstoi,k,refvol)
-        data.append(rate)
-        rows.append(i)
-        columns.append(j)
-        data.append(-rate)
-        rows.append(i)
-        columns.append(i)
+    multiindex2=multiindex-rstois[rind]+pstois[rind]
+    if np.all(multiindex2>=0):
+        j=get_index(multiindex2)
+        k=frateconstants[i,rind]
+        if not np.isnan(k) and j>=0:
+            rate=get_rate(multiindex,rstois[rind],k,refvol)
+            data.append(rate)
+            rows.append(i)
+            columns.append(j)
     #reverse reaction
-    k=gas.reverse_rate_constants[rind]
-    multiindex2=multiindex+rstoi-pstoi
-    j=get_index(multiindex2)
-    # if np.all(multiindex2>=0) and k>0 and j>=0:
-    if np.all(multiindex2>=0) and not np.isnan(k) and j>=0:
-        rate=get_rate(multiindex,pstoi,k,refvol)
-        data.append(rate)
-        rows.append(i)
-        columns.append(j)
-        data.append(-rate)
-        rows.append(i)
-        columns.append(i)
+    multiindex2=multiindex+rstois[rind]-pstois[rind]
+    if np.all(multiindex2>=0):
+        k=rrateconstants[i,rind]
+        j=get_index(multiindex2)
+        if not np.isnan(k) and j>=0:
+            rate=get_rate(multiindex,pstois[rind],k,refvol)
+            data.append(rate)
+            rows.append(i)
+            columns.append(j)
     return data,rows,columns
 
 #Main loop over rows to enumerate sparse data
@@ -107,6 +91,87 @@ def calculate_sparse_elements(rind, startrow, endrow):
         columns+=rowcolumns
     return data,rows,columns
 
+def setstate(multiindex):
+    T,P,X=gas.TPX
+    if(args.adiabatic == 1):
+        try:
+            gas.UVX=refenergy/refmass,refvol/refmass,multiindex
+            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+            if(quant.T > 200):
+                T=quant.T
+                P=quant.P
+            else:
+                gas.TPX=T,P,X
+                return 0,0
+        except:
+            gas.TPX=T,P,X
+            return 0,0
+    elif(args.adiabatic == 2):
+        try:
+            gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
+            quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
+            if(quant.T > 200): #far outside the range where these constants are valid...
+                T=quant.T
+                P=quant.P
+            else:
+                gas.TPX=T,P,X
+                return 0,0
+        except:
+            gas.TPX=T,P,X
+            return 0,0
+    return T,P/ct.one_atm
+
+def list(current, threshold):
+    stack=[current]
+    previous=[str(current)]
+    T,P=setstate(current)
+    frateconstants=[gas.forward_rate_constants]
+    rrateconstants=[gas.reverse_rate_constants]
+    multiindices=[current]
+    temperatures=[T]
+    pressures=[P]
+
+    while(len(stack)>0):
+        current=stack.pop()
+        for rind in range(nr):
+            T,P=setstate(current)
+            next=current-rstois[rind]+pstois[rind]
+            if np.all(next>=0) and not str(next) in previous:
+                k=gas.forward_rate_constants[rind]
+                frate=get_rate(current,rstois[rind],k,refvol)
+                T,P=setstate(next)
+                if T!=0:
+                    k=gas.reverse_rate_constants[rind]
+                    rrate=get_rate(next,pstois[rind],k,refvol)
+                    if frate>threshold*rrate:
+                        stack.append(next)
+                        multiindices.append(next)
+                        temperatures.append(T)
+                        pressures.append(P)
+                        previous.append(str(next))
+                        frateconstants.append(gas.forward_rate_constants)
+                        rrateconstants.append(gas.reverse_rate_constants)
+            if gas.is_reversible(rind):
+                T,P=setstate(current)
+                next=current+rstois[rind]-pstois[rind]
+                if np.all(next>=0) and not str(next) in previous:
+                    k=gas.reverse_rate_constants[rind]
+                    frate=get_rate(current,pstois[rind],k,refvol)
+                    T,P=setstate(next)
+                    if T!=0:
+                        k=gas.forward_rate_constants[rind]
+                        rrate=get_rate(next,rstois[rind],k,refvol)
+                        if frate>threshold*rrate:
+                            stack.append(next)
+                            multiindices.append(next)
+                            temperatures.append(T)
+                            pressures.append(P)
+                            previous.append(str(next))
+                            frateconstants.append(gas.forward_rate_constants)
+                            rrateconstants.append(gas.reverse_rate_constants)
+
+    return np.array(multiindices), np.array(temperatures), np.array(pressures), np.array(frateconstants), np.array(rrateconstants)
+
 #Main
 filebase=args.filebase
 mechanism=args.mechanism
@@ -117,8 +182,12 @@ nr=gas.n_reactions
 species=gas.species_names
 elements=gas.element_names
 refmultiindex=np.zeros(ns,dtype=int)
-for i in range(0,len(args.reference),2):
-    refmultiindex[args.reference[i]]=args.reference[i+1]
+if len(args.refspecies) != len(args.refcounts):
+    print("refspecies and refcounts must be the same length")
+for i in range(len(args.refspecies)):
+    index=np.where([name ==  args.refspecies[i] for name in gas.species_names])[0][0]
+    refmultiindex[index]=args.refcounts[i]
+
 sp_atoms=[]
 for i in range(ns):
     sp_atoms.append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
@@ -126,7 +195,6 @@ sp_atoms=np.array(sp_atoms)
 atoms=np.zeros(len(elements),dtype=int)
 for i in range(len(refmultiindex)):
     atoms += refmultiindex[i]*sp_atoms[i]
-fixed=np.array(args.fix)
 
 atoms=np.array(atoms)
 gas.TPX=args.temperature,args.pressure*ct.one_atm,refmultiindex
@@ -137,136 +205,35 @@ refenergy=refquant.int_energy
 refmass=refquant.mass
 refvol=refquant.volume
 refpotentials=refquant.chemical_potentials
+rstois=np.array(np.transpose(gas.reactant_stoich_coeffs()),dtype=int)
+pstois=np.array(np.transpose(gas.product_stoich_coeffs()),dtype=int)
 
+
+runtime1=0
+runtime2=0
+runtime3=0
+runtime4=0
 #Calculate the space of possible states
-if args.accumulate==0:
+if args.calculate == 1:
     start=timeit.default_timer()
-
-    multiindex=[]
-    last_avail=[[],[]]
-    for i in range(ns):
-        multiindex.append(0)
-        last_avail[0].append(i)
-        last_avail[1].append(np.array([int(gas.species()[i].composition[el] if el in gas.species()[i].composition.keys() else 0) for el in elements]))
-
-
-    frvecs=np.unique(np.transpose(gas.reactant_stoich_coeffs()-gas.product_stoich_coeffs()),axis=0)
-
-    if len(fixed)==2:
-        while refmultiindex[fixed[0]] != fixed[1]:
-            #make a list of available reactions
-            avail=[]
-            for i in range(len(frvecs)):
-                if np.all(refmultiindex+frvecs[i]>=0) and np.abs(refmultiindex[fixed[0]] + frvecs[i,fixed[0]] - fixed[1])<np.abs(refmultiindex[fixed[0]] - fixed[1]) :
-                    avail.append(frvecs[i])
-                if np.all(refmultiindex-frvecs[i]>=0) and np.abs(refmultiindex[fixed[0]] - frvecs[i,fixed[0]] - fixed[1])<np.abs(refmultiindex[fixed[0]] - fixed[1]) :
-                    avail.append(-frvecs[i])
-            if(len(avail)==0):
-                print("Could not fix!")
-                quit()
-            refmultiindex = (refmultiindex+avail[np.random.randint(len(avail))]).astype(int)
-        # frvecs=frvecs[np.where(frvecs[:,fixed[0]]==0)[0]]
-
-    rvecs=np.zeros((2*len(frvecs),ns),dtype=int)
-    for ind in range(len(frvecs)):
-        rvecs[2*ind]=frvecs[ind]
-        rvecs[2*ind+1]=-frvecs[ind]
-
-    multiindices=rlist.list(refmultiindex, rvecs)
+    multiindices,temperatures,pressures,frateconstants,rrateconstants=list(refmultiindex,args.thrs)
     sorted=np.argsort(np.sum((ns**np.arange(ns)*multiindices),axis=1))
     multiindices=multiindices[sorted]
-
-
-    accessible=[]
-    temperatures=[]
-    pressures=[]
-    inaccessible=[]
-    gas=ct.Solution(mechanism)
-
-    if(args.adiabatic == 1):
-        for multiindex in multiindices:
-            try:
-                gas.UVX=refenergy/refmass,refvol/refmass,multiindex
-                quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-                if(quant.T > 200): #far outside the range where these constants are valid...
-                    temperatures.append(quant.T)
-                    pressures.append(quant.P/ct.one_atm)
-                    accessible.append(multiindex)
-                else:
-                    inaccessible.append(multiindex)
-            except:
-                inaccessible.append(multiindex)
-    elif(args.adiabatic == 2):
-        for multiindex in multiindices:
-            try:
-                gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
-                quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-                if(quant.T > 100): #far outside the range where these constants are valid...
-                    temperatures.append(quant.T)
-                    pressures.append(quant.P/ct.one_atm)
-                    accessible.append(multiindex)
-                else:
-                    inaccessible.append(multiindex)
-            except:
-                inaccessible.append(multiindex)
-    else:
-        accessible=multiindices
-        temperatures=np.zeros(len(multiindices))+args.temperature
-        pressures=np.zeros(len(multiindices))+args.pressure
-
-    multiindices=np.array(accessible)
+    temperatures=temperatures[sorted]
+    pressures=pressures[sorted]
+    frateconstants=frateconstants[sorted]
+    rrateconstants=rrateconstants[sorted]
     dim=len(multiindices)
 
-    atot=np.sum(atoms)
-    runtime=timeit.default_timer()-start
-
-
+    runtime1=timeit.default_timer()-start
     np.save(filebase+"multiindices.npy",multiindices)
     np.save(filebase+"temperatures.npy",temperatures)
     np.save(filebase+"pressures.npy",pressures)
-    out=open(filebase+"out.dat","w")
 
-    print(dim, ns, runtime, file=out)
-    print(*refmultiindex, file=out)
-    print(*elements, file=out)
-    out.close()
     if(args.print == 1):
         print("state space dimension: ", dim)
-        print("state space runtime: ", runtime)
-else:
-    if os.path.isfile(filebase+"multiindices.npy"):
-        multiindices=np.load(filebase+"multiindices.npy")
-    else:
-        mfiles=sorted(glob.glob('%s*multiindices.npy'%filebase))
-        tfiles=sorted(glob.glob('%s*temperatures.npy'%filebase))
-        pfiles=sorted(glob.glob('%s*pressures.npy'%filebase))
+        print("state space runtime: ", runtime1)
 
-        multiindices=[]
-        temperatures=[]
-        pressures=[]
-        for file in mfiles:
-            multiindices+=np.load(file).tolist()
-        for file in tfiles:
-            temperatures+=np.load(file).tolist()
-        for file in pfiles:
-            pressures+=np.load(file).tolist()
-        multiindices=np.array(multiindices)
-        temperatures=np.array(temperatures)
-        pressures=np.array(pressures)
-        np.save(filebase+"multiindices.npy",multiindices)
-        np.save(filebase+"temperatures.npy",temperatures)
-        np.save(filebase+"pressures.npy",pressures)
-
-    file=open(filebase+"out.dat","r")
-    instrings=file.readline().split()
-    dim=int(instrings[0])
-    instrings=file.readline().split()
-    refmultiindex=np.array([int(float(i)) for i in instrings])
-
-startrow, endrow=args.calculate
-if endrow==-1 or endrow > dim:
-    endrow=dim
-if endrow>startrow:
     #Loop through each reaction index and calculate spase elements
     start=timeit.default_timer()
 
@@ -282,132 +249,99 @@ if endrow>startrow:
     rows=[]
     columns=[]
     for rind in range(nr):
-        reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind, startrow, endrow)
+        reac_data,reac_rows,reac_columns=calculate_sparse_elements(rind, 0, dim)
         data+=reac_data
         rows+=reac_rows
         columns+=reac_columns
     np.save(filebase+"spatoms.npy",sp_atoms)
-    if not os.path.exists(filebase+"rows"):
-        os.mkdir(filebase+"rows")
-    if not os.path.exists(filebase+"columns"):
-        os.mkdir(filebase+"columns")
-    if not os.path.exists(filebase+"data"):
-        os.mkdir(filebase+"data")
-    np.save(filebase+"rows/%i_%i.npy"%(startrow,endrow),rows)
-    np.save(filebase+"columns/%i_%i.npy"%(startrow,endrow),columns)
-    np.save(filebase+"data/%i_%i.npy"%(startrow,endrow),data)
-    runtime=timeit.default_timer()-start
-    out=open(filebase+"cout_%i_%i.dat"%(startrow,endrow),"w")
-    print(runtime, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
-    out.close()
+
+    np.save(filebase+"rows.npy",rows)
+    np.save(filebase+"columns.npy",columns)
+    np.save(filebase+"data.npy",data)
+    runtime2=timeit.default_timer()-start
+
     if(args.print == 1):
-        print("calculate runtime:", runtime)
+        print("calculate runtime:", runtime2)
+
+multiindices=np.load(filebase+"multiindices.npy")
+dim=len(multiindices)
+rows=np.load(filebase+"rows.npy")
+columns=np.load(filebase+"columns.npy")
+data=np.load(filebase+"data.npy")
+
+ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
+ratematrix_th=ratematrix.copy()
+
+ratematrix=ratematrix.tolil()
+ratematrix=ratematrix-np.diag(np.sum(ratematrix.toarray(),axis=0))
+
+remove=[]
+ratematrix_th=ratematrix_th.tolil()
+entries=np.unique(np.transpose([rows,columns]),axis=1)
+for i,j in entries:
+    if ratematrix_th[i,j] < args.thrs*ratematrix_th[j,i]:
+        remove.append([i,j])
+remove=np.array(remove)
+for rem in remove:
+    ratematrix_th[rem[0],rem[1]]=0
+
+ratematrix_th=ratematrix_th-np.diag(np.sum(ratematrix_th.toarray(),axis=0))
+
+np.save(filebase+"matrix.npy",np.transpose(ratematrix).tolist())
+np.save(filebase+"thresholded.npy",np.transpose(ratematrix_th).tolist())
 
 #Calculate eigenvalues
 if args.eigenvalues==-1:
     args.eigenvalues=dim
 if args.eigenvalues>0:
-    #accumulate rows, data, and columns
     start=timeit.default_timer()
-
-    if args.accumulate==1:
-        if  os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
-            rows=np.load(args.filebase+"rows.npy")
-            columns=np.load(args.filebase+"columns.npy")
-            data=np.load(args.filebase+"data.npy")
-        else:
-            files=glob.glob(args.filebase+"rows/*.npy")
-            rows=[]
-            for file in files:
-                row=np.load(file).tolist()
-                rows+=row
-            files=glob.glob(args.filebase+"columns/*.npy")
-            columns=[]
-            for file in files:
-                column=np.load(file).tolist()
-                columns+=column
-            files=glob.glob(args.filebase+"data/*.npy")
-            data=[]
-            for file in files:
-                dat=np.load(file).tolist()
-                data+=dat
-    np.save(filebase+"rows.npy",rows)
-    np.save(filebase+"columns.npy",columns)
-    np.save(filebase+"data.npy",data)
-
-    ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
-
     if args.eigenvalues < ratematrix.shape[0]:
         v0=np.zeros(dim)
         v0[get_index(refmultiindex)]=1
         eigenvalues,eigenvectors=eigs(ratematrix, args.eigenvalues, sigma=-1/args.tau, which='LM',v0=v0)
-        # svals=svds(ratematrix, args.eigenvalues, which='SM', return_singular_vectors=False)
-        svals=np.array(dim)
+        eigenvalues,eigenvectors=eigs(ratematrix_th, args.eigenvalues, sigma=-1/args.tau, which='LM',v0=v0)
     else:
-        # eigenvalues,eigenvectors=np.linalg.eig(ratematrix.toarray())
-        eigenvalues,eigenvectors=eig(ratematrix.toarray())
-        # svals=np.linalg.svd(ratematrix.toarray(),compute_uv=False)
-        svals=np.array(dim)
+        eigenvalues,eigenvectors=eig(ratematrix)
+        eigenvalues_th,eigenvectors_th=eig(ratematrix_th)
 
     sorted=np.argsort(eigenvalues)
+    sorted_th=np.argsort(eigenvalues_th)
     np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
-    np.save(filebase+"singularvalues.npy",svals)
     np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
+    np.save(filebase+"eigenvalues_th.npy",eigenvalues_th.astype(complex)[sorted_th])
+    np.save(filebase+"eigenvectors_th.npy",eigenvectors_th.astype(complex)[:,sorted_th])
 
-    runtime=timeit.default_timer()-start
-    out=open(filebase+"eout.dat","w")
-    print(runtime, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out, end=' ')
-    out.close()
+    runtime3=timeit.default_timer()-start
+
     if(args.print == 1):
-        print("eigenvalues runtime:", runtime)
+        print("eigenvalues runtime:", runtime3)
 
 if args.propogate == 1:
     start=timeit.default_timer()
 
-    if os.path.isfile(args.filebase+"rows.npy") and os.path.isfile(args.filebase+"columns.npy") and os.path.isfile(args.filebase+"data.npy"):
-        rows=np.load(args.filebase+"rows.npy")
-        columns=np.load(args.filebase+"columns.npy")
-        data=np.load(args.filebase+"data.npy")
-    else:
-        files=glob.glob(args.filebase+"rows/*.npy")
-        rows=[]
-        for file in files:
-            row=np.load(file).tolist()
-            rows+=row
-        files=glob.glob(args.filebase+"columns/*.npy")
-        columns=[]
-        for file in files:
-            column=np.load(file).tolist()
-            columns+=column
-        files=glob.glob(args.filebase+"data/*.npy")
-        data=[]
-        for file in files:
-            dat=np.load(file).tolist()
-            data+=dat
-        np.save(filebase+"rows.npy",rows)
-        np.save(filebase+"columns.npy",columns)
-        np.save(filebase+"data.npy",data)
-
-    ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
-
     def func(t,y):
         return ratematrix.dot(y)
-
     y0=np.zeros(dim)
     y0[get_index(refmultiindex)]=1.0
-    times=[args.t0*(args.tmax/args.t0)**(n*1.0/args.Nt) for n in range(args.Nt)]
-    sol=solve_ivp(func,[0,args.tmax], y0, method='BDF', t_eval=times, atol=1e-8, rtol=1e-6, first_step=args.t0/100, jac=ratematrix)
+    times=[args.t0*(args.tmax/args.t0)**(n*1.0/(args.Nt-1)) for n in range(args.Nt)]
+
+    sol=solve_ivp(func,[0,args.tmax], y0, method='BDF', t_eval=times, atol=1e-6, rtol=1e-6, first_step=args.t0/100, jac=ratematrix)
     vals=np.transpose(np.array(sol.y)).tolist()
 
     np.save(filebase+"times.npy",np.array(times))
     np.save(filebase+"propogate.npy",vals)
 
-    runtime=timeit.default_timer()-start
-    out=open(filebase+"rout.dat","w")
-    print(runtime, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
-    out.close()
+    runtime4=timeit.default_timer()-start
+
     if(args.print == 1):
         print("propogate success:", sol.success)
-        print("propogate runtime:", runtime)
+        print("propogate runtime:", runtime4)
+
+
+out=open(filebase+"out.dat","w")
+print(dim, ns, runtime1, runtime2, runtime3, runtime4, resource.getrusage(resource.RUSAGE_SELF).ru_maxrss, file=out)
+print(*refmultiindex, file=out)
+print(*elements, file=out)
+out.close()
 if(args.print == 1):
     print("memory:", resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)

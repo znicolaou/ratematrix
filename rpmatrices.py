@@ -100,10 +100,8 @@ unirev=[]
 birev=[]
 rmfwd=[]
 rmrev=[]
-
 uninu=[]
 binu=[]
-count=0
 totrstoi=np.zeros(ns,dtype=int)
 totpstoi=np.zeros(ns,dtype=int)
 
@@ -113,11 +111,8 @@ for rind in range(nr):
         reversible+=1
 print(ns,"species",nr,"reactions,",reversible,"of which are reversible.")
 
-# pbar=progressbar.ProgressBar(widgets=['Reactions: ', progressbar.Percentage(), progressbar.Bar(), ' ', progressbar.ETA()], maxval=nr)
-# pbar.start()
-#Find list of reactions that must be removed for constraints
+#Find list of reactions that must be removed for uni/bispecies constraints
 for rind in range(nr):
-    # pbar.update(nr)
     reaction=gas.reactions()[rind]
     rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species],dtype=int)
     pstoi=np.array([reaction.products[x] if x in reaction.products.keys() else 0 for x in species],dtype=int)
@@ -134,7 +129,6 @@ for rind in range(nr):
             bifwd.append(rind)
         else:
             rmfwd.append(rind)
-            count=count+1
         #reverse reactions
         if reaction.reversible:
             if(len(pinds)==1):
@@ -143,13 +137,10 @@ for rind in range(nr):
                 birev.append(rind)
             else:
                 rmrev.append(rind)
-                count=count+1
     else:
         rmfwd.append(rind)
-        count=count+1
         if reaction.reversible:
             rmrev.append(rind)
-            count=count+1
 
 #Identify reactions that violate constraints
 #Unispecies
@@ -189,23 +180,43 @@ Sp=np.zeros((ns,ns,ns), dtype=int)
 Ar=np.zeros((ns,ns))
 Ap=np.zeros((ns,ns))
 
+#determine product sets for calculation of Ap
 productsets=[[] for i in range(ns)]
+reactions=[[] for i in range(ns)]
 for ind in range(nr):
     if ind not in rm:
         for prod in np.where(pstois[ind]>0)[0]:
             productsets[prod].append(np.where(rstois[ind]>0)[0])
+            reactions[prod].append(ind)
         if gas.is_reversible(ind):
             for prod in np.where(rstois[ind]>0)[0]:
                 productsets[prod].append(np.where(pstois[ind]>0)[0])
+                reactions[prod].append(ind)
 
-count=0
+#determine additional reaction for removal to generate Ap by randomly generating L, and calculate Ap
+rm2=[]
 for i in range(ns):
-    if(len(productsets[i]) > 0):
-        if (len(productsets[i]) > len(np.unique(np.concatenate(productsets[i])))):
-            count=count+1
-print("Cannot generate the list L for", count, "of", ns, "species.")
+    L=[]
+    for ind in range(len(productsets[i])):
+        if len(np.setdiff1d(productsets[i][ind],L))==0:
+            rm2.append(reactions[i][ind])
+        elif reactions[i][ind] not in rm2:
+            index=np.random.choice(np.setdiff1d(productsets[i][ind],L))
+            L.append(index)
+            #forward reactions
+            if i in np.where(pstois[reactions[i][ind]]!=0)[0]:
+                k=gas.forward_rate_constants[rind]
+                Ap[i,index]=k
+                Sp[i,index]=rstois[reactions[i][ind]]
+            #reverse reactions
+            elif i in np.where(rstois[reactions[i][ind]]!=0)[0] and gas.is_reversible(reactions[i][ind]):
+                k=gas.reverse_rate_constants[rind]
+                Ap[i,index]=k
+                Sp[i,index]=pstois[reactions[i][ind]]
+print(1.0/nr*(len(rm)+len(np.unique(rm2))), " percent of reactions removed to naively generate Ap")
 
-#Calculate matrices
+#Calculate Ar
+rm=np.concatenate((rm,rm2))
 for rind in np.setdiff1d(np.arange(nr), rm):
     reaction=gas.reactions()[rind]
     rstoi=np.array([reaction.reactants[x] if x in reaction.reactants.keys() else 0 for x in species],dtype=int)
@@ -218,74 +229,28 @@ for rind in np.setdiff1d(np.arange(nr), rm):
     #forward reactions
     k=gas.forward_rate_constants[rind]
     if(len(rinds)==1):
-        #reactants
         Ar[rinds[0],rinds[0]]=k
-        if not np.all(Sr[rinds[0],rinds[0]] == np.zeros(ns)) and not np.all(Sr[rinds[0],rinds[0]] == rstoi):
-            print("error!")
         Sr[rinds[0],rinds[0]]=rstoi
-        #products
-        # for pind in pinds:
-        #     Ap[pind, rinds[0]] = k
-        #     if not np.all(Sp[pind, rinds[0]] == np.zeros(ns)) and not np.all(Sp[pind, rinds[0]] == rstoi):
-        #         print("error!")
-        #     Sp[pind, rinds[0]] = rstoi
     elif(len(rinds)==2):
-        #reactants
         Ar[rinds[0],rinds[1]]=k
         Ar[rinds[1],rinds[0]]=k
-        if not np.all(Sr[rinds[0],rinds[1]] == np.zeros(ns)) and not np.all(Sr[rinds[0],rinds[1]] == rstoi):
-            print("error!")
         Sr[rinds[0],rinds[1]]=rstoi
-        if not np.all(Sr[rinds[1],rinds[0]] == np.zeros(ns)) and not np.all(Sr[rinds[1],rinds[0]] == rstoi):
-            print("error!")
         Sr[rinds[1],rinds[0]]=rstoi
-        #products
-        # for pind in pinds:
-        #     rind=np.random.choice(rinds)
-        #     Ap[pind, rind] = k
-        #     if not np.all(Sp[pind, rind] == np.zeros(ns)) and not np.all(Sp[pind, rind] == pstoi):
-        #         print("error reverse products!")
-        #     Sp[pind, rind] = pstoi
-    else:
-        print("error!")
 
     #reverse reactions
     if gas.is_reversible(rind):
         k=gas.reverse_rate_constants[rind]
         if(len(pinds)==1):
-            #reactants
             Ar[pinds[0],pinds[0]]=k
-            if not np.all(Sr[pinds[0],pinds[0]] == np.zeros(ns)) and not np.all(Sr[pinds[0],pinds[0]] == pstoi):
-                print("error!")
             Sr[pinds[0],pinds[0]]=pstoi
-            #products
-            # for rind in rinds:
-            #     Ap[rind, pinds[0]] = k
-            #     if not np.all(Sp[rind, pinds[0]] == np.zeros(ns)) and not np.all(Sp[rind, pinds[0]] == pstoi):
-            #         print("error!")
-            #     Sp[rind, pinds[0]] = pstoi
         elif(len(pinds)==2):
-            #reactants
             Ar[pinds[0],pinds[1]]=k
             Ar[pinds[1],pinds[0]]=k
-            if not np.all(Sr[pinds[0],pinds[1]] == np.zeros(ns)) and not np.all(Sr[pinds[0],pinds[1]] == pstoi):
-                print("error!")
             Sr[pinds[0],pinds[1]]=pstoi
-            if not np.all(Sr[pinds[1],pinds[0]] == np.zeros(ns)) and not np.all(Sr[pinds[1],pinds[0]] == pstoi):
-                print("error!")
             Sr[pinds[1],pinds[0]]=pstoi
-            #products
-            # for rind in rinds:
-            #     pind=np.random.choice(pinds)
-            #     Ap[rind, pind] = k
-            #     if not np.all(Sp[rind, pind] == np.zeros(ns)) and not np.all(Sp[rind, pind] == pstoi):
-            #         print("error reverse products!")
-            #     Sp[rind, pind] = pstoi
-        else:
-            print("error!")
 
 np.save(args.filebase+"Ar", Ar)
-
+np.save(args.filebase+"Ap", Ap)
 
 for remove in rm:
     if(gas.reaction_type(remove) == 4):
