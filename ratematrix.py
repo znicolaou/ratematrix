@@ -287,9 +287,6 @@ for rem in remove:
 
 ratematrix_th=ratematrix_th-np.diag(np.sum(ratematrix_th.toarray(),axis=0))
 
-np.save(filebase+"matrix.npy",np.transpose(ratematrix).tolist())
-np.save(filebase+"thresholded.npy",np.transpose(ratematrix_th).tolist())
-
 #Calculate eigenvalues
 if args.eigenvalues==-1:
     args.eigenvalues=dim
