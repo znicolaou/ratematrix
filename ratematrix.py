@@ -33,6 +33,8 @@ parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Init
 parser.add_argument("--tmax", type=float, required=False, default=1e2, help='Final integration time for propogating.')
 parser.add_argument("--Nt", type=int, required=False, default=101, help='Number of times to propogate.')
 parser.add_argument("--print", type=int, required=False, default=1, choices=[0,1], help='Print runtimes.')
+parser.add_argument("--csv", type=int, required=False, default=0, choices=[0,1], help='Save matrix to csv.')
+
 args = parser.parse_args()
 
 #Functions for relating multiindices to matrix indices
@@ -296,17 +298,30 @@ if args.eigenvalues>0:
         v0=np.zeros(dim)
         v0[get_index(refmultiindex)]=1
         eigenvalues,eigenvectors=eigs(ratematrix, args.eigenvalues, sigma=-1/args.tau, which='LM',v0=v0)
-        eigenvalues,eigenvectors=eigs(ratematrix_th, args.eigenvalues, sigma=-1/args.tau, which='LM',v0=v0)
     else:
         eigenvalues,eigenvectors=eig(ratematrix)
-        eigenvalues_th,eigenvectors_th=eig(ratematrix_th)
 
-    sorted=np.argsort(eigenvalues)
-    sorted_th=np.argsort(eigenvalues_th)
-    np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex)[sorted])
-    np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex)[:,sorted])
-    np.save(filebase+"eigenvalues_th.npy",eigenvalues_th.astype(complex)[sorted_th])
-    np.save(filebase+"eigenvectors_th.npy",eigenvectors_th.astype(complex)[:,sorted_th])
+    sorted=np.argsort(np.real(eigenvalues))
+    eigenvalues=eigenvalues[sorted]
+    eigenvectors=eigenvectors[:,sorted]
+
+    np.save(filebase+"eigenvalues.npy",eigenvalues.astype(complex))
+    np.save(filebase+"eigenvectors.npy",eigenvectors.astype(complex))
+
+    index=np.where(np.all(refmultiindex==multiindices,axis=1))[0]
+    ic=np.zeros(dim)
+    ic[index]=1
+    alpha=np.linalg.pinv(eigenvectors).dot(ic)
+    np.save(filebase+"alpha.npy",alpha.astype(complex))
+
+    times=[args.t0*(args.tmax/args.t0)**(n*1.0/(args.Nt-1)) for n in range(args.Nt)]
+    states=np.real(np.array([np.dot(eigenvectors,np.exp(eigenvalues*t)*alpha) for t in times]))
+    np.save(filebase+"states.npy",states)
+
+    if args.csv:
+        np.savetxt(filebase+"states.csv", states.tolist(), fmt='%.18e', delimiter=',')
+        np.savetxt(filebase+"eigenvalues.csv", eigenvalues.tolist(), fmt='%.18e', delimiter=',')
+        np.savetxt(filebase+"eigenvectors.csv", eigenvectors.tolist(), fmt='%.18e', delimiter=',')
 
     runtime3=timeit.default_timer()-start
 
@@ -342,3 +357,7 @@ print(*elements, file=out)
 out.close()
 if(args.print == 1):
     print("memory:", resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+
+if args.csv:
+    np.savetxt(filebase+"w.csv", np.transpose(ratematrix).tolist(), fmt='%.18e', delimiter=',')
+    np.savetxt(filebase+"w_th.csv", np.transpose(ratematrix_th).tolist(), fmt='%.18e', delimiter=',')
