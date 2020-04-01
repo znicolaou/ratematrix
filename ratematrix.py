@@ -315,8 +315,10 @@ if args.eigenvalues>0:
     np.save(filebase+"alpha.npy",alpha.astype(complex))
 
     times=[args.t0*(args.tmax/args.t0)**(n*1.0/(args.Nt-1)) for n in range(args.Nt)]
+    eigenvalues[-1]=0
     states=np.real(np.array([np.dot(eigenvectors,np.exp(eigenvalues*t)*alpha) for t in times]))
     np.save(filebase+"states.npy",states)
+    np.save(filebase+"times.npy",times)
 
     if args.csv:
         np.savetxt(filebase+"states.csv", states.tolist(), fmt='%.18e', delimiter=',')
