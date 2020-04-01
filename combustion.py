@@ -35,7 +35,7 @@ parser.add_argument("--filebase", type=str, required=True, dest='filebase', help
 parser.add_argument("--temperature", type=float, required=False, default=1000, help='Temperature in Kelvin. Default 1000.')
 parser.add_argument("--adiabatic", type=int, choices=[0, 1, 2], required=False, default=1, help='Convert energy from reactions to heat. The values 0, 1, and 2 correspond to constant volume/temperature, constant volume/energy, and constant pressure/enthalpy, respectively. The temperature is specify the reference multiindix specified with --reference. ')
 parser.add_argument("--refspecies", type=str, nargs='+', required=False, default=['H2', 'O2', 'OH', 'AR'], help="Reference multiindex for which the temperature and number of atoms are specified. Default ['H2', 'O2', 'OH', 'AR'].")
-parser.add_argument("--refcounts", type=int, nargs='+', required=False, default=[8, 4, 1, 80], help='Reference multiindex for which the temperature and number of atoms are specified. Default [8, 4, 1, 80].')
+parser.add_argument("--refcounts", type=int, nargs='+', required=False, default=[8, 4, 0, 80], help='Reference multiindex for which the temperature and number of atoms are specified. Default [8, 4, 0, 80].')
 parser.add_argument("--pressure", type=float, required=False, default=1, help='Pressure in atm. Default 1.')
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
 parser.add_argument("--tmax", type=float, required=False, default=1e2, help='Final integration time for propogating.')
@@ -77,7 +77,12 @@ times=[t0*(tmax/t0)**(n*1.0/Npoints) for n in range(Npoints)]
 
 observation=runsim(times)
 
+rstois=np.array(np.transpose(gas.reactant_stoich_coeffs()),dtype=int)
+pstois=np.array(np.transpose(gas.product_stoich_coeffs()),dtype=int)
 
+np.save(args.filebase+"rstois.npy",rstois)
+np.save(args.filebase+"pstois.npy",pstois)
+np.save(args.filebase+"rates.npy",observation.net_rates_of_progress)
 np.save(args.filebase+"times.npy", observation.t)
 np.save(args.filebase+"concentrations.npy", observation.X)
 np.save(args.filebase+"temperatures.npy", observation.T)

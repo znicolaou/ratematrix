@@ -361,3 +361,8 @@ if(args.print == 1):
 if args.csv:
     np.savetxt(filebase+"w.csv", np.transpose(ratematrix).tolist(), fmt='%.18e', delimiter=',')
     np.savetxt(filebase+"w_th.csv", np.transpose(ratematrix_th).tolist(), fmt='%.18e', delimiter=',')
+    np.savetxt(filebase+"species.csv", np.array(multiindices,dytpe=int))
+    head=''
+    for el in gas.element_names:
+        head = head + el + ','
+    np.savetxt(filebase+"atoms.csv", np.array(sp_atoms, dtype=int), header=head)
