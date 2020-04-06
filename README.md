@@ -17,7 +17,7 @@ usage: ratematrix.py [-h] --filebase FILEBASE [--mechanism MECHANISM]
                      [--pressure PRESSURE] [--calculate {0,1}]
                      [--eigenvalues EIGENVALUES] [--propogate {0,1}]
                      [--thrs THRS] [--tau TAU] [--t0 T0] [--tmax TMAX]
-                     [--Nt NT] [--print {0,1}]
+                     [--Nt NT] [--print {0,1}] [--csv {0,1}]
 
 Generate a sparse rate matrix from cantera model.
 
@@ -58,6 +58,7 @@ optional arguments:
   --tmax TMAX           Final integration time for propogating.
   --Nt NT               Number of times to propogate.
   --print {0,1}         Print runtimes.
+  --csv {0,1}           Save files to csv format.
   ```
   -----------
 # Example
