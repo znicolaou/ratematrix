@@ -33,7 +33,7 @@ parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Init
 parser.add_argument("--tmax", type=float, required=False, default=1e2, help='Final integration time for propogating.')
 parser.add_argument("--Nt", type=int, required=False, default=101, help='Number of times to propogate.')
 parser.add_argument("--print", type=int, required=False, default=1, choices=[0,1], help='Print runtimes.')
-parser.add_argument("--csv", type=int, required=False, default=0, choices=[0,1], help='Save matrix to csv.')
+parser.add_argument("--csv", type=int, required=False, default=0, choices=[0,1], help='Save files to csv format.')
 
 args = parser.parse_args()
 
@@ -272,22 +272,9 @@ columns=np.load(filebase+"columns.npy")
 data=np.load(filebase+"data.npy")
 
 ratematrix=coo_matrix((np.array(data),(np.array(columns),np.array(rows))),(int(dim),int(dim)))
-ratematrix_th=ratematrix.copy()
 
 ratematrix=ratematrix.tolil()
 ratematrix=ratematrix-np.diag(np.sum(ratematrix.toarray(),axis=0))
-
-remove=[]
-ratematrix_th=ratematrix_th.tolil()
-entries=np.unique(np.transpose([rows,columns]),axis=1)
-for i,j in entries:
-    if ratematrix_th[i,j] < args.thrs*ratematrix_th[j,i]:
-        remove.append([i,j])
-remove=np.array(remove)
-for rem in remove:
-    ratematrix_th[rem[0],rem[1]]=0
-
-ratematrix_th=ratematrix_th-np.diag(np.sum(ratematrix_th.toarray(),axis=0))
 
 #Calculate eigenvalues
 if args.eigenvalues==-1:
@@ -361,8 +348,9 @@ if(args.print == 1):
     print("memory:", resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
 
 if args.csv:
-    np.savetxt(filebase+"w.csv", np.transpose(ratematrix).tolist(), fmt='%.18e', delimiter=',')
-    np.savetxt(filebase+"w_th.csv", np.transpose(ratematrix_th).tolist(), fmt='%.18e', delimiter=',')
+    np.savetxt(filebase+"w_rows.csv", rows, fmt='%.18e', delimiter=',')
+    np.savetxt(filebase+"w_columns.csv", columns, fmt='%.18e', delimiter=',')
+    np.savetxt(filebase+"w_data.csv", data, fmt='%.18e', delimiter=',')
     np.savetxt(filebase+"species.csv", np.array(multiindices,dytpe=int))
     head=''
     for el in gas.element_names:
