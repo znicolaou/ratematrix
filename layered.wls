@@ -31,7 +31,7 @@ Print[AbsoluteTiming[g=Graph[Range[Length[components]],edges,GraphLayout->{"Vert
 Print[AbsoluteTiming[p=Show[g];]]
 (*Print[AbsoluteTiming[Export[filebase<>"connected.pdf",p]]]*)
 
-Print[AbsoluteTiming[vcs=p[[1,1,2,3;;-1]]/.Disk[u_,r_]:>u/.DynamicName[u_, v_]:>u;]]
+Print[AbsoluteTiming[vcs=p[[1,1,2,3;;-1]]/.Disk[u_,r_]:>u/.DynamicName[u_, v_]:>u/.Point[u_]:>u;]]
 Print[AbsoluteTiming[ecs=p[[1,1,1,4;;-1]]/.{Arrow[{DynamicLocation[u_,Automatic,Center],DynamicLocation[v_,Automatic,Center]}]:>{vcs[[ToExpression[StringSplit[u,"$"][[2]]]]],vcs[[ToExpression[StringSplit[v,"$"][[2]]]]]},Arrow[BezierCurve[{DynamicLocation[u_,Automatic,Center],l__,DynamicLocation[v_,Automatic,Center]}]]:>Join[{vcs[[ToExpression[StringSplit[u,"$"][[2]]]]]},{l},{vcs[[ToExpression[StringSplit[v,"$"][[2]]]]]}]};]]
 BinaryWrite[filebase<>"nodes.dat",N[Flatten[vcs]],"Real64"]
 BinaryWrite[filebase<>"edges.dat",N[Flatten[ecs]],"Real64"]
