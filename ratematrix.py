@@ -298,8 +298,10 @@ if args.eigenvalues>0:
     index=np.where(np.all(refmultiindex==multiindices,axis=1))[0]
     ic=np.zeros(dim)
     ic[index]=1
-    alpha=np.linalg.pinv(eigenvectors).dot(ic)
+    pinv=np.linalg.pinv(eigenvectors)
+    alpha=pinv.dot(ic)
     np.save(filebase+"alpha.npy",alpha.astype(complex))
+    np.save(filebase+"pinv.npy",pinv.astype(complex))
 
     times=[args.t0*(args.tmax/args.t0)**(n*1.0/(args.Nt-1)) for n in range(args.Nt)]
     eigenvalues[-1]=0
