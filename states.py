@@ -50,13 +50,15 @@ eigenvectors=np.load(filebase+"eigenvectors.npy")
 pinv=np.load(filebase+"pinv.npy")
 
 print(pinv.shape)
-index=np.where(np.all(refmultiindex==multiindices,axis=1))[0][0]
-ic=np.zeros(dim)
-ic[index]=1
-alpha=pinv.dot(ic)
-tot=np.abs(np.sum(eigenvectors@alpha))
-max=np.max(np.abs(eigenvectors@alpha))
-print(index,tot,max)
+# index=np.where(np.all(refmultiindex==multiindices,axis=1))[0][0]
+# ic=np.zeros(dim)
+# ic[index]=1
+# alpha=pinv.dot(ic)
+# tot=np.abs(np.sum(eigenvectors@alpha))
+# max=np.max(np.abs(eigenvectors@alpha))
+# print(index,tot,max)
+tot=0
+max=0
 while np.abs(tot-1)>0.1 or np.abs(max-1)>0.1:
     index=np.random.randint(0,dim)
     ic=np.zeros(dim)
