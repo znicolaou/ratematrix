@@ -11,7 +11,6 @@ from scipy.linalg import eig
 from scipy.special import factorial, binom
 from scipy.integrate import ode, solve_ivp
 import sys
-import rlist
 import glob
 
 #Command-line arguments
