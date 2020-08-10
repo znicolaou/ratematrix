@@ -97,7 +97,7 @@ def setstate(multiindex):
         try:
             gas.UVX=refenergy/refmass,refvol/refmass,multiindex
             quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            if(quant.T > 200):
+            if(quant.T > 0):
                 T=quant.T
                 P=quant.P
             else:
@@ -110,7 +110,7 @@ def setstate(multiindex):
         try:
             gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
             quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            if(quant.T > 200): #far outside the range where these constants are valid...
+            if(quant.T > 0): #far outside the range where these constants are valid...
                 T=quant.T
                 P=quant.P
             else:
