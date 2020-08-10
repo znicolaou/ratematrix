@@ -25,7 +25,7 @@ parser.add_argument("--pressure", type=float, required=False, default=1, help='P
 parser.add_argument("--calculate", type=int, required=False, default=1, choices=[0,1], help='Flag to calculate  rate matrix. Default 1.')
 parser.add_argument("--eigenvalues", type=int, required=False, default=-1, help='Flag to calculate  eigenvalues. If 1, then print args.temperature, args.pressure, total atoms, dimension, runtime, recursive calls, recursive levels, and save rate matrix, eigenvalues, and eigenvectors, then quit. Default 1.')
 parser.add_argument("--propogate", type=int, required=False, default=0, choices=[0,1], help='Flag to propogate reference multiindex.')
-parser.add_argument("--thrs", type=float, required=False, default=1e-2, help='Threshold for including reactions.')
+parser.add_argument("--thrs", type=float, required=False, default=1e-3, help='Threshold for including reactions.')
 parser.add_argument("--tau", type=float, required=False, default=1e-5, help='Time scale for shift invert.')
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
 parser.add_argument("--tmax", type=float, required=False, default=1e2, help='Final integration time for propogating.')
@@ -47,7 +47,7 @@ def get_index(multiindex):
 
 def get_rate (multiindex, stoi, k, vol):
     if np.all(multiindex>=stoi):
-        return k*np.product(binom(multiindex, stoi)*factorial(stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
+        return k*np.product(binom(multiindex, stoi))/(ct.avogadro*vol)**(np.sum(stoi)-1)
     else:
         return 0.
 
