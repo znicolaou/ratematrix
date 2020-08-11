@@ -29,6 +29,7 @@ parser.add_argument("--thrs", type=float, required=False, default=1e-3, help='Th
 parser.add_argument("--tau", type=float, required=False, default=1e-5, help='Time scale for shift invert.')
 parser.add_argument("--t0", type=float, required=False, default=1e-8, help='Initial integration time for propogating.')
 parser.add_argument("--tmax", type=float, required=False, default=1e2, help='Final integration time for propogating.')
+parser.add_argument("--Tmin", type=float, required=False, default=200, help='Minimum temperature for states to enumerate.')
 parser.add_argument("--Nt", type=int, required=False, default=101, help='Number of times to propogate.')
 parser.add_argument("--print", type=int, required=False, default=1, choices=[0,1], help='Print runtimes.')
 parser.add_argument("--csv", type=int, required=False, default=0, choices=[0,1], help='Save files to csv format.')
@@ -97,7 +98,7 @@ def setstate(multiindex):
         try:
             gas.UVX=refenergy/refmass,refvol/refmass,multiindex
             quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            if(quant.T > 0):
+            if(quant.T > args.Tmin):
                 T=quant.T
                 P=quant.P
             else:
@@ -110,7 +111,7 @@ def setstate(multiindex):
         try:
             gas.HPX=(refenth+np.dot(multiindex-refmultiindex,refpotentials)/(1000*ct.avogadro))/refmass,args.pressure*ct.one_atm,multiindex
             quant=ct.Quantity(gas, moles=np.sum(multiindex)/ct.avogadro)
-            if(quant.T > 0): #far outside the range where these constants are valid...
+            if(quant.T > args.Tmin):
                 T=quant.T
                 P=quant.P
             else:
