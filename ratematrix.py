@@ -234,6 +234,7 @@ if args.calculate == 1:
     if(args.print == 1):
         print("state space dimension: ", dim)
         print("state space runtime: ", runtime1)
+        sys.stdout.flush()
 
     #Loop through each reaction index and calculate spase elements
     start=timeit.default_timer()
@@ -263,6 +264,7 @@ if args.calculate == 1:
 
     if(args.print == 1):
         print("calculate runtime:", runtime2)
+        sys.stdout.flush()
 
 multiindices=np.load(filebase+"multiindices.npy")
 dim=len(multiindices)
@@ -317,6 +319,7 @@ if args.eigenvalues>0:
 
     if(args.print == 1):
         print("eigenvalues runtime:", runtime3)
+        sys.stdout.flush()
 
 if args.propogate == 1:
     start=timeit.default_timer()
@@ -338,6 +341,7 @@ if args.propogate == 1:
     if(args.print == 1):
         print("propogate success:", sol.success)
         print("propogate runtime:", runtime4)
+        sys.stdout.flush()
 
 
 out=open(filebase+"out.dat","w")
@@ -347,6 +351,7 @@ print(*elements, file=out)
 out.close()
 if(args.print == 1):
     print("memory:", resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+    sys.stdout.flush()
 
 if args.csv:
     np.savetxt(filebase+"w_rows.csv", rows, fmt='%.18e', delimiter=',')
