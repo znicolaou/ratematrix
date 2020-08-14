@@ -25,6 +25,7 @@ parser.add_argument("--tmax", type=float, required=False, default=1e2, help='Fin
 parser.add_argument("--Nt", type=int, required=False, default=101, help='Number of times to propogate.')
 
 parser.add_argument("--seed", type=int, required=False, default=1, help='Random seed.')
+parser.add_argument("--index", type=int, required=False, default=0, help='Initial state index.')
 
 args = parser.parse_args()
 
@@ -48,18 +49,12 @@ eigenvalues=np.load(filebase+"eigenvalues.npy")
 eigenvectors=np.load(filebase+"eigenvectors.npy")
 pinv=np.load(filebase+"pinv.npy")
 
-print(pinv.shape)
-# index=np.where(np.all(refmultiindex==multiindices,axis=1))[0][0]
-# ic=np.zeros(dim)
-# ic[index]=1
-# alpha=pinv.dot(ic)
-# tot=np.abs(np.sum(eigenvectors@alpha))
-# max=np.max(np.abs(eigenvectors@alpha))
-# print(index,tot,max)
 tot=0
 max=0
 while np.abs(tot-1)>0.1 or np.abs(max-1)>0.1:
     index=np.random.randint(0,dim)
+    if args.index != 0:
+        index=args.index
     ic=np.zeros(dim)
     ic[index]=1
     alpha=pinv.dot(ic)
@@ -67,10 +62,6 @@ while np.abs(tot-1)>0.1 or np.abs(max-1)>0.1:
     max=np.max(np.abs(eigenvectors@alpha))
     print(index,tot,max)
 print(multiindices[index])
-print(index)
-
-
-np.save(filebase+"alpha2.npy",alpha.astype(complex))
 
 times=[args.t0*(args.tmax/args.t0)**(n*1.0/(args.Nt-1)) for n in range(args.Nt)]
 eigenvalues[-1]=0
